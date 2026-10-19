@@ -30,7 +30,7 @@ const DEFAULT_CATEGORIES = [
 ];
 
 // Nama penginput awal — bisa ditambah/dihapus dari aplikasi.
-const DEFAULT_INPUTTERS = ["Bobby", "Killa", "rofek"];
+const DEFAULT_INPUTTERS = ["Bobby", "Killa", "kita"];
 
 export async function initDb(db) {
   if (!db || typeof db.exec !== "function") {
@@ -66,4 +66,7 @@ export async function initDb(db) {
     .prepare(`INSERT OR IGNORE INTO inputters (name) VALUES ${ipPlaceholders}`)
     .bind(...DEFAULT_INPUTTERS)
     .run();
+  // Sekali jalan (2026-10-20): "rofek" dihapus dari daftar default,
+  // digantikan "kita". Idempoten — aman dijalankan ulang.
+  await db.prepare("DELETE FROM inputters WHERE name = ?").bind("rofek").run();
 }
