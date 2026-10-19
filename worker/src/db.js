@@ -8,6 +8,7 @@ const SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions (date)",
   "CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions (type)",
   "CREATE TABLE IF NOT EXISTS categories (name TEXT PRIMARY KEY, type TEXT NOT NULL CHECK (type IN ('in', 'out')))",
+  "CREATE TABLE IF NOT EXISTS inputters (name TEXT PRIMARY KEY)",
 ];
 
 const DEFAULT_CATEGORIES = [
@@ -28,6 +29,9 @@ const DEFAULT_CATEGORIES = [
   ["Lainnya (Keluar)", "out"],
 ];
 
+// Nama penginput awal — bisa ditambah/dihapus dari aplikasi.
+const DEFAULT_INPUTTERS = ["Bobby", "Killa", "rofek"];
+
 export async function initDb(db) {
   if (!db || typeof db.exec !== "function") {
     throw new Error("D1 binding (DB) tidak tersedia — cek database_id di konfigurasi worker");
@@ -39,7 +43,6 @@ export async function initDb(db) {
       throw new Error(`schema statement #${i + 1} gagal: ${e?.message || e}`);
     }
   }
-  const row = await db.prepare("SELECT COUNT(*) AS c FROM categories").first();
   // Seed kategori default SELALU dijalankan dengan INSERT OR IGNORE —
   // idempoten (tak ada duplikat), dan kategori default baru otomatis
   // masuk ke database lama setiap init dipanggil (mis. habis deploy).
@@ -48,5 +51,19 @@ export async function initDb(db) {
   await db
     .prepare(`INSERT OR IGNORE INTO categories (name, type) VALUES ${placeholders}`)
     .bind(...params)
+    .run();
+
+  // Migrasi: kolom input_by untuk database yang dibuat sebelum fitur ini ada.
+  const cols = await db.prepare("PRAGMA table_info(transactions)").all();
+  const hasInputBy = (cols.results || []).some((c) => c.name === "input_by");
+  if (!hasInputBy) {
+    await db.exec("ALTER TABLE transactions ADD COLUMN input_by TEXT NOT NULL DEFAULT ''");
+  }
+
+  // Seed penginput default — idempoten seperti kategori.
+  const ipPlaceholders = DEFAULT_INPUTTERS.map(() => "(?)").join(", ");
+  await db
+    .prepare(`INSERT OR IGNORE INTO inputters (name) VALUES ${ipPlaceholders}`)
+    .bind(...DEFAULT_INPUTTERS)
     .run();
 }

@@ -133,6 +133,10 @@ body::before {
   width: 36px; height: 36px; border-radius: 10px; display: block;
   box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.4);
 }
+/* Dropdown "Diinput oleh" + tombol kelola nama */
+.inputter-wrap { display: flex; gap: 8px; align-items: center; }
+.inputter-wrap select { flex: 1; min-width: 0; }
+.inputter-wrap .btn.sm { flex-shrink: 0; }
 .topbar nav {
   display: flex; gap: 2px; margin: 0 auto;
   background: var(--card2); border: 1px solid var(--border);

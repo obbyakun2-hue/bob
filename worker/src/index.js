@@ -59,6 +59,29 @@ export default {
         return json({ categories: results || [] });
       }
 
+      // ---------- daftar penginput (siapa yang input data) ----------
+      // Bisa ditambah/dihapus dari aplikasi; dipakai sebagai label transaksi.
+      if (path === "/api/inputters" && request.method === "GET") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        const { results } = await env.DB.prepare("SELECT name FROM inputters ORDER BY name").all();
+        return json({ inputters: (results || []).map((r) => r.name) });
+      }
+      if (path === "/api/inputters" && request.method === "POST") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        const b = await request.json().catch(() => ({}));
+        const name = String(b.name || "").trim().slice(0, 40);
+        if (!name) return json({ error: "Nama tidak boleh kosong" }, 400);
+        await env.DB.prepare("INSERT OR IGNORE INTO inputters (name) VALUES (?)").bind(name).run();
+        return json({ name }, 201);
+      }
+      const mInp = path.match(/^\/api\/inputters\/(.+)$/);
+      if (mInp && request.method === "DELETE") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        const name = decodeURIComponent(mInp[1]).slice(0, 40);
+        await env.DB.prepare("DELETE FROM inputters WHERE name = ?").bind(name).run();
+        return json({ ok: true });
+      }
+
       // ---------- upload struk ----------
       // Jalur utama: TELEGRAM (gratis, praktis unlimited, tanpa kartu kredit).
       // Foto dikirim via sendPhoto ke chat Telegram; kalau meta transaksi
@@ -79,6 +102,7 @@ export default {
           category: String(form.get("category") || "").slice(0, 80),
           amount: Math.floor(Number(form.get("amount")) || 0),
           note: String(form.get("note") || "").slice(0, 500),
+          input_by: String(form.get("input_by") || "").slice(0, 40),
         };
         const hasMeta = meta.amount > 0 && DATE_RE.test(meta.date);
 
@@ -216,16 +240,17 @@ export default {
           const amount = Math.floor(Number(b.amount) || 0);
           const note = String(b.note || "").slice(0, 500);
           const receipt_key = String(b.receipt_key || "").slice(0, 200);
+          const input_by = String(b.input_by || "").trim().slice(0, 40);
           if (!DATE_RE.test(date)) return json({ error: "Tanggal tidak valid (YYYY-MM-DD)" }, 400);
           if (amount <= 0) return json({ error: "Nominal harus lebih dari 0" }, 400);
           const tx = {
             id: crypto.randomUUID(),
-            date, type, category, amount, note, receipt_key,
+            date, type, category, amount, note, receipt_key, input_by,
             created_at: new Date().toISOString(),
           };
           await env.DB.prepare(
-            "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-          ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.created_at).run();
+            "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.input_by, tx.created_at).run();
 
           // Notif Telegram — dilewati bila upload tadi sudah mengirim foto+caption
           // notifikasi sekali jalan (receipt via Telegram selalu begitu).
@@ -259,6 +284,7 @@ export default {
         const items = Array.isArray(b.items) ? b.items : [];
         if (!items.length) return json({ error: "Tidak ada data" }, 400);
         if (items.length > 50) return json({ error: "Maksimal 50 transaksi sekaligus" }, 400);
+        const input_by = String(b.input_by || "").trim().slice(0, 40);
         const txs = [];
         for (const it of items) {
           const date = String(it.date || "").slice(0, 10);
@@ -273,16 +299,17 @@ export default {
             id: crypto.randomUUID(),
             date, type, category, amount, note,
             receipt_key: "",
+            input_by,
             created_at: new Date().toISOString(),
           });
         }
         const stmt = env.DB.prepare(
-          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         await env.DB.batch(
-          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.created_at))
+          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.created_at))
         );
-        notifyBatch(env, txs).catch(() => {});
+        notifyBatch(env, txs, input_by).catch(() => {});
         return json({ count: txs.length, transactions: txs }, 201);
       }
 
@@ -308,6 +335,10 @@ export default {
           setIf("amount", Math.floor(Number(b.amount) || 0), (v) => v > 0);
           setIf("note", String(b.note ?? "").slice(0, 500));
           setIf("receipt_key", String(b.receipt_key ?? "").slice(0, 200));
+          if (b.input_by !== undefined) {
+            fields.push("input_by = ?");
+            params.push(String(b.input_by).trim().slice(0, 40));
+          }
           if (!fields.length) return json({ error: "Tidak ada perubahan" }, 400);
           params.push(id);
           await env.DB.prepare(`UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`)

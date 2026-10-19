@@ -5,6 +5,7 @@ const $ = (s) => document.querySelector(s);
 const state = {
   token: localStorage.getItem("uang_token") || "",
   categories: [],
+  inputters: [],
   chart: null,
   editingId: null,
   formType: "out",
@@ -128,6 +129,9 @@ async function showApp() {
   try {
     const { categories } = await api("/api/categories");
     state.categories = categories;
+    const { inputters } = await api("/api/inputters");
+    state.inputters = inputters;
+    renderInputterSelects();
   } catch (err) {
     toast(err.message, false);
     return;
@@ -230,7 +234,7 @@ function txRow(t) {
   <div class="tx-row ${t.type}">
     <div class="tx-ico">${catIcon(t.category, t.type)}</div>
     <div class="tx-main"><b>${escHtml(t.category)}</b>
-      <span class="muted">${fmtDate(t.date)}${t.note ? " • " + escHtml(t.note) : ""}</span>
+      <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}</span>
     </div>
     <div class="tx-amt">${t.type === "in" ? "+" : "-"}${fmtIDR(t.amount)}</div>
   </div>`;
@@ -243,6 +247,56 @@ function buildCategoryFilter() {
     state.categories.map((c) => `<option>${escHtml(c.name)}</option>`).join("");
 }
 $("#f-apply").addEventListener("click", () => loadTx().catch((e) => toast(e.message, false)));
+
+// ---------------- penginput (siapa yang input data) ----------------
+// Daftar nama bisa ditambah/dihapus sendiri; pilihan terakhir diingat.
+function renderInputterSelects() {
+  const last = localStorage.getItem("uang_inputter") || "";
+  document.querySelectorAll(".inputter-select").forEach((sel) => {
+    sel.innerHTML = state.inputters.map((n) => `<option>${escHtml(n)}</option>`).join("");
+    if (state.inputters.includes(last)) sel.value = last;
+  });
+}
+document.querySelectorAll(".inputter-select").forEach((sel) =>
+  sel.addEventListener("change", () => localStorage.setItem("uang_inputter", sel.value))
+);
+document.querySelectorAll(".inputter-add").forEach((btn) =>
+  btn.addEventListener("click", async () => {
+    const name = prompt("Nama penginput baru:");
+    if (!name || !name.trim()) return;
+    try {
+      const { name: saved } = await api("/api/inputters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      if (!state.inputters.includes(saved)) state.inputters.push(saved);
+      state.inputters.sort((a, b) => a.localeCompare(b));
+      localStorage.setItem("uang_inputter", saved);
+      renderInputterSelects();
+      toast(`"${saved}" ditambahkan ✅`);
+    } catch (e) {
+      toast(e.message, false);
+    }
+  })
+);
+document.querySelectorAll(".inputter-del").forEach((btn) =>
+  btn.addEventListener("click", async () => {
+    const sel = btn.closest(".inputter-wrap").querySelector(".inputter-select");
+    const name = sel.value;
+    if (!name) return;
+    if (!confirm(`Hapus "${name}" dari daftar penginput?`)) return;
+    try {
+      await api("/api/inputters/" + encodeURIComponent(name), { method: "DELETE" });
+      state.inputters = state.inputters.filter((n) => n !== name);
+      localStorage.removeItem("uang_inputter");
+      renderInputterSelects();
+      toast(`"${name}" dihapus`);
+    } catch (e) {
+      toast(e.message, false);
+    }
+  })
+);
 
 async function loadTx() {
   const p = new URLSearchParams({ limit: 200, offset: 0 });
@@ -260,7 +314,7 @@ async function loadTx() {
     <div class="tx-row ${t.type}">
       <div class="tx-ico">${catIcon(t.category, t.type)}</div>
       <div class="tx-main"><b>${escHtml(t.category)}</b>
-        <span class="muted">${fmtDate(t.date)}${t.note ? " • " + escHtml(t.note) : ""}${
+        <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}${
             t.receipt_key ? ` • <a href="/api/receipt/${t.receipt_key}" target="_blank">🧾 struk</a>` : ""
           }</span>
       </div>
@@ -289,9 +343,9 @@ async function delTx(id) {
 }
 
 $("#f-export").addEventListener("click", () => {
-  const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Catatan"]];
+  const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Diinput oleh", "Catatan"]];
   for (const t of state.lastTx)
-    rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, t.note || ""]);
+    rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, t.input_by || "", t.note || ""]);
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
@@ -377,7 +431,7 @@ $("#bulk-submit").addEventListener("click", async () => {
     const r = await api("/api/transactions/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ items, input_by: $("#bulk-inputter").value || "" }),
     });
     toast(`${r.count} transaksi tersimpan ✅ — rekap dikirim ke Telegram`);
     resetBulkRows();
@@ -425,6 +479,13 @@ function startEdit(id) {
   $("#tx-category").value = t.category;
   $("#tx-amount").value = Number(t.amount).toLocaleString("id-ID");
   $("#tx-note").value = t.note || "";
+  const inpSel = $("#tx-inputter");
+  if (t.input_by && ![...inpSel.options].some((o) => o.value === t.input_by)) {
+    const opt = document.createElement("option");
+    opt.textContent = t.input_by;
+    inpSel.appendChild(opt);
+  }
+  if (t.input_by) inpSel.value = t.input_by;
   $("#form-title").textContent = "Ubah Transaksi";
   $("#tx-submit").textContent = "Simpan Perubahan";
   $("#tx-cancel").hidden = false;
@@ -472,6 +533,7 @@ $("#tx-form").addEventListener("submit", async (e) => {
       category: $("#tx-category").value,
       amount,
       note: $("#tx-note").value.trim(),
+      input_by: $("#tx-inputter").value || "",
     };
     let receipt_key = "";
     let notified = false;
@@ -489,6 +551,7 @@ $("#tx-form").addEventListener("submit", async (e) => {
       fd.append("category", txData.category);
       fd.append("amount", String(txData.amount));
       fd.append("note", txData.note);
+      fd.append("input_by", txData.input_by);
       const up = await fetch("/api/upload", {
         method: "POST",
         headers: { Authorization: "Bearer " + state.token },

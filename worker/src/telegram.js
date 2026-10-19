@@ -19,6 +19,7 @@ export function txMessage(tx) {
     `Kategori: ${escapeHtml(tx.category)}`,
     `Tanggal : ${escapeHtml(tx.date)}`,
   ];
+  if (tx.input_by) lines.push(`👤 Input oleh: ${escapeHtml(tx.input_by)}`);
   if (tx.note) lines.push(`Catatan : ${escapeHtml(tx.note)}`);
   return lines.join("\n");
 }
@@ -43,8 +44,10 @@ async function tgSend(env, method, body, isForm) {
 }
 
 // Rekap banyak transaksi dalam 1 pesan (mode borongan) — anti spam.
-export function batchMessage(txs) {
-  const lines = [`🧾 <b>${txs.length} TRANSAKSI BARU (BORONGAN)</b>`, ""];
+export function batchMessage(txs, inputBy) {
+  const lines = [`🧾 <b>${txs.length} TRANSAKSI BARU (BORONGAN)</b>`];
+  if (inputBy) lines.push(`👤 Diinput oleh: ${escapeHtml(inputBy)}`);
+  lines.push("");
   let totalIn = 0,
     totalOut = 0;
   for (const tx of txs) {
@@ -60,9 +63,9 @@ export function batchMessage(txs) {
   return lines.join("\n");
 }
 
-export async function notifyBatch(env, txs) {
+export async function notifyBatch(env, txs, inputBy) {
   try {
-    await tgSend(env, "sendMessage", { text: batchMessage(txs), parse_mode: "HTML" });
+    await tgSend(env, "sendMessage", { text: batchMessage(txs, inputBy), parse_mode: "HTML" });
   } catch (e) {
     console.log("notifyBatch failed:", e?.message || e);
   }
