@@ -314,22 +314,27 @@ export default {
         if (items.length > 50) return json({ error: "Maksimal 50 transaksi sekaligus" }, 400);
         const input_by = String(b.input_by || "").trim().slice(0, 40);
         const txs = [];
+        const recapTxs = [];
         for (const it of items) {
           const date = String(it.date || "").slice(0, 10);
           const type = it.type === "in" ? "in" : "out";
           const category = String(it.category || "Lainnya").slice(0, 80) || "Lainnya";
           const amount = Math.floor(Number(it.amount) || 0);
           const note = String(it.note || "").slice(0, 500);
+          const receipt_key = String(it.receipt_key || "").slice(0, 200);
+          const notified = it.notified === true; // struk sudah ternotifikasi via foto
           if (!DATE_RE.test(date) || amount <= 0) {
             return json({ error: "Ada baris yang tanggal / nominalnya tidak valid" }, 400);
           }
-          txs.push({
+          const tx = {
             id: crypto.randomUUID(),
             date, type, category, amount, note,
-            receipt_key: "",
+            receipt_key,
             input_by,
             created_at: new Date().toISOString(),
-          });
+          };
+          txs.push(tx);
+          if (!notified) recapTxs.push(tx);
         }
         const stmt = env.DB.prepare(
           "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -337,7 +342,8 @@ export default {
         await env.DB.batch(
           txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.created_at))
         );
-        ctx.waitUntil(notifyBatch(env, txs, input_by));
+        // Rekap teks hanya untuk baris yang belum ternotifikasi via foto (anti dobel)
+        if (recapTxs.length) ctx.waitUntil(notifyBatch(env, recapTxs, input_by));
         return json({ count: txs.length, transactions: txs }, 201);
       }
 

@@ -447,6 +447,8 @@ function addBulkRow() {
     <select class="b-cat"></select>
     <input class="b-amount" inputmode="numeric" placeholder="Nominal Rp" />
     <input class="b-note" placeholder="Catatan (opsional)" />
+    <button type="button" class="btn sm b-photo" title="Foto struk (opsional)">📷</button>
+    <input type="file" class="b-file" accept="image/*" hidden />
     <button type="button" class="btn sm danger b-del" title="Hapus baris">✕</button>`;
   const typeSel = div.querySelector(".b-type");
   const catSel = div.querySelector(".b-cat");
@@ -466,6 +468,20 @@ function addBulkRow() {
     div.remove();
     bulkCount--;
   });
+  // Foto struk per baris — tap tombol untuk pilih/ganti, tampil thumbnail
+  const photoBtn = div.querySelector(".b-photo");
+  const fileInput = div.querySelector(".b-file");
+  photoBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files[0];
+    if (f) {
+      photoBtn.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="struk" />`;
+      photoBtn.title = "Struk: " + f.name + " (tap untuk ganti)";
+    } else {
+      photoBtn.textContent = "📷";
+      photoBtn.title = "Foto struk (opsional)";
+    }
+  });
   $("#bulk-rows").appendChild(div);
 }
 
@@ -484,26 +500,59 @@ $("#bulk-submit").addEventListener("click", async () => {
     const amount = parseInt((row.querySelector(".b-amount").value || "").replace(/\D/g, ""), 10);
     if (!amount) continue; // baris kosong dilewati otomatis
     items.push({
+      row,
       date: row.querySelector(".b-date").value,
       type: row.querySelector(".b-type").value,
       category: row.querySelector(".b-cat").value,
       amount,
       note: row.querySelector(".b-note").value.trim(),
+      file: row.querySelector(".b-file").files[0] || null,
     });
   }
   if (!items.length) {
     toast("Isi dulu minimal 1 baris", false);
     return;
   }
+  const input_by = $("#bulk-inputter").value || "";
   const btn = $("#bulk-submit");
   btn.disabled = true;
   try {
+    // 1. Upload foto tiap baris yang ada fotonya (paralel).
+    //    One-shot: foto + caption notifikasi dikirim sekali jalan via Telegram.
+    const uploaded = await Promise.all(
+      items.map(async (it, i) => {
+        if (!it.file) return { ...it, receipt_key: "", notified: false };
+        const webp = await compressToWebp(it.file);
+        const fd = new FormData();
+        fd.append("file", new File([webp], "struk.webp", { type: "image/webp" }));
+        fd.append("date", it.date);
+        fd.append("type", it.type);
+        fd.append("category", it.category);
+        fd.append("amount", String(it.amount));
+        fd.append("note", it.note);
+        fd.append("input_by", input_by);
+        const up = await fetch("/api/upload", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + state.token },
+          body: fd,
+        });
+        const ud = await up.json().catch(() => ({}));
+        if (!up.ok) throw new Error(ud.error || `Upload struk baris ${i + 1} gagal`);
+        return { ...it, receipt_key: ud.key || "", notified: ud.notified === true };
+      })
+    );
+    // 2. Simpan semua sekaligus (rekap teks hanya untuk baris tanpa foto)
+    const payload = uploaded.map(({ row, file, ...rest }) => rest);
     const r = await api("/api/transactions/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items, input_by: $("#bulk-inputter").value || "" }),
+      body: JSON.stringify({ items: payload, input_by }),
     });
-    toast(`${r.count} transaksi tersimpan ✅ — rekap dikirim ke Telegram`);
+    const nPhoto = uploaded.filter((x) => x.receipt_key).length;
+    toast(
+      `${r.count} transaksi tersimpan ✅` +
+        (nPhoto ? ` — ${nPhoto} struk terkirim ke Telegram` : " — rekap dikirim ke Telegram")
+    );
     resetBulkRows();
   } catch (e) {
     toast(e.message, false);
