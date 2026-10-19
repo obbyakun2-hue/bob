@@ -308,7 +308,13 @@ async function showApp() {
 
 // ---------------- tabs ----------------
 document.querySelectorAll(".nav-btn").forEach((b) =>
-  b.addEventListener("click", () => switchTab(b.dataset.tab))
+  b.addEventListener("click", () => {
+    // Reset form edit kalau user pindah tab manual — jangan sampai
+    // form "Ubah" nyangkut dan menimpa data lain saat dikira tambah baru.
+    if (b.dataset.tab === "tambah" && state.editingId) resetForm();
+    if (b.dataset.tab === "hutang" && state.editingDebtId) resetDebtForm();
+    switchTab(b.dataset.tab);
+  })
 );
 function switchTab(name) {
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));

@@ -436,6 +436,7 @@ export default {
           await env.DB.prepare(`UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`)
             .bind(...params).run();
           const row = await env.DB.prepare("SELECT * FROM transactions WHERE id = ?").bind(id).first();
+          if (!row) return json({ error: "Transaksi tidak ditemukan" }, 404);
           // Bersihkan file struk lama di KV kalau diganti/dihapus — jangan jadi yatim.
           // (Struk Telegram tidak bisa dihapus otomatis; itu keterbatasan API.)
           const newReceiptKey = b.receipt_key !== undefined ? String(b.receipt_key).slice(0, 200) : oldReceiptKey;
@@ -448,6 +449,7 @@ export default {
         if (request.method === "DELETE") {
           const row = await env.DB.prepare("SELECT receipt_key FROM transactions WHERE id = ?")
             .bind(id).first();
+          if (!row) return json({ error: "Transaksi tidak ditemukan" }, 404);
           await env.DB.prepare("DELETE FROM transactions WHERE id = ?").bind(id).run();
           if (row?.receipt_key && env.RECEIPTS) {
             try { await env.RECEIPTS.delete(row.receipt_key); } catch { /* abaikan */ }
@@ -537,12 +539,14 @@ export default {
           params.push(id);
           await env.DB.prepare(`UPDATE debts SET ${fields.join(", ")} WHERE id = ?`).bind(...params).run();
           const row = await env.DB.prepare("SELECT * FROM debts WHERE id = ?").bind(id).first();
+          if (!row) return json({ error: "Data hutang tidak ditemukan" }, 404);
           if (b.status === "lunas" && row) ctx.waitUntil(notifyDebtPaid(env, row));
           return json({ debt: row });
         }
 
         if (request.method === "DELETE") {
-          await env.DB.prepare("DELETE FROM debts WHERE id = ?").bind(id).run();
+          const del = await env.DB.prepare("DELETE FROM debts WHERE id = ?").bind(id).run();
+          if (!del.meta.changes) return json({ error: "Data hutang tidak ditemukan" }, 404);
           return json({ ok: true });
         }
 
