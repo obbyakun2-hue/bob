@@ -63,8 +63,8 @@ Alur workflow (diambil dari pola cloud-mail, versi ramping):
 1. Checkout → setup pnpm + Node → `pnpm install --frozen-lockfile`
 2. Validasi secrets → substitusi placeholder non-secret di `worker/wrangler-action.toml`
 3. Cek/buat KV namespace & database D1 (pakai secret kalau diisi, kalau tidak cari berdasarkan nama, kalau belum ada dibuatkan otomatis)
-4. Push secrets via `wrangler secret bulk` → tersimpan terenkripsi di Cloudflare
-5. `wrangler deploy` → dapat URL `https://<nama>.workers.dev`
+4. `wrangler deploy` → dapat URL `https://<nama>.workers.dev` (sekaligus menghapus vars plaintext lama)
+5. Push secrets via `wrangler secret bulk` → tersimpan terenkripsi di Cloudflare
 6. Panggil `/api/init/<JWT_SECRET>` → buat tabel + seed 14 kategori default
 
 Setelah deploy sukses, buka URL workers.dev → login dengan `ADMIN_USERNAME` /
