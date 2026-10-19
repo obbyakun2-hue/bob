@@ -33,6 +33,7 @@
       <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
       <button class="nav-btn" data-tab="transaksi">Transaksi</button>
       <button class="nav-btn" data-tab="tambah">+ Tambah</button>
+      <button class="nav-btn" data-tab="hutang">💳 Hutang</button>
     </nav>
     <div class="top-actions">
       <button id="tg-test-btn" class="icon-btn" title="Tes notifikasi Telegram">🔔</button>
@@ -158,6 +159,63 @@
         <div class="row">
           <button type="submit" class="btn primary" id="tx-submit">Simpan</button>
           <button type="button" class="btn ghost" id="tx-cancel" hidden>Batal</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- HUTANG -->
+    <section id="tab-hutang" class="tab" hidden>
+      <div class="dash-head">
+        <div><h2>Ringkasan Hutang</h2><p class="muted" id="debt-subtitle">Kelola hutang &amp; piutang</p></div>
+      </div>
+      <div class="stats">
+        <div class="card stat out">
+          <div class="stat-ico">🔴</div>
+          <div class="stat-body"><span class="label">Hutang Saya</span><span class="value" id="debt-stat-owe">Rp0</span></div>
+        </div>
+        <div class="card stat in">
+          <div class="stat-ico">🟢</div>
+          <div class="stat-body"><span class="label">Piutang</span><span class="value" id="debt-stat-owed">Rp0</span></div>
+        </div>
+        <div class="card stat balance">
+          <div class="stat-ico">⏰</div>
+          <div class="stat-body"><span class="label">Lewat Tenggat</span><span class="value" id="debt-stat-overdue">0</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><h3>Daftar Hutang &amp; Piutang</h3><button class="btn primary sm" id="debt-add-btn">＋ Tambah</button></div>
+        <div class="row" style="margin-bottom:12px">
+          <select id="debt-filter-status" style="max-width:220px">
+            <option value="belum">Belum lunas</option>
+            <option value="lunas">Lunas</option>
+            <option value="">Semua</option>
+          </select>
+        </div>
+        <div id="debt-list"></div>
+      </div>
+      <form id="debt-form" class="card form-card" hidden>
+        <div class="card-title"><h3 id="debt-form-title">Tambah Hutang</h3></div>
+        <div class="type-toggle">
+          <button type="button" id="debt-type-hutang" class="toggle active"><span>🔴</span>Saya berhutang</button>
+          <button type="button" id="debt-type-piutang" class="toggle"><span>🟢</span>Saya menghutangi</button>
+        </div>
+        <label>Orang<input id="debt-person" placeholder="cth: Budi" required /></label>
+        <div class="form-grid">
+          <label>Mulai hutang<input type="date" id="debt-start" required /></label>
+          <label>Tenggat <em class="hint">(opsional)</em><input type="date" id="debt-due" /></label>
+        </div>
+        <label>Diinput oleh
+          <div class="inputter-wrap">
+            <select class="inputter-select" id="debt-inputter"></select>
+            <button type="button" class="btn sm inputter-add" title="Tambah nama">＋</button>
+            <button type="button" class="btn sm danger inputter-del" title="Hapus nama terpilih">✕</button>
+          </div>
+        </label>
+        <label>Nominal (Rp)<input id="debt-amount" inputmode="numeric" placeholder="0" required /></label>
+        <label>Catatan<textarea id="debt-note" rows="2" placeholder="cth: pinjam buat modal"></textarea></label>
+        <div class="row">
+          <button type="submit" class="btn primary" id="debt-submit">Simpan</button>
+          <button type="button" class="btn ghost" id="debt-cancel">Batal</button>
         </div>
       </form>
     </section>

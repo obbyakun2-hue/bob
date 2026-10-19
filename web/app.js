@@ -10,6 +10,9 @@ const state = {
   editingId: null,
   formType: "out",
   lastTx: [],
+  debtType: "hutang",
+  editingDebtId: null,
+  debts: [],
 };
 
 const fmtIDR = (n) => "Rp" + Number(n || 0).toLocaleString("id-ID");
@@ -166,6 +169,7 @@ function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t) => (t.hidden = t.id !== "tab-" + name));
   if (name === "dashboard") loadDashboard().catch((e) => toast(e.message, false));
   if (name === "transaksi") loadTx().catch((e) => toast(e.message, false));
+  if (name === "hutang") loadDebts().catch((e) => toast(e.message, false));
 }
 
 // ---------------- dashboard ----------------
@@ -422,6 +426,177 @@ $("#f-export").addEventListener("click", () => {
   a.download = "transaksi.csv";
   a.click();
   toast("CSV diunduh");
+});
+
+// ---------------- hutang & piutang ----------------
+function setDebtType(t) {
+  state.debtType = t;
+  $("#debt-type-hutang").classList.toggle("active", t === "hutang");
+  $("#debt-type-piutang").classList.toggle("active", t === "piutang");
+}
+$("#debt-type-hutang").addEventListener("click", () => setDebtType("hutang"));
+$("#debt-type-piutang").addEventListener("click", () => setDebtType("piutang"));
+
+$("#debt-amount").addEventListener("input", (e) => {
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 15);
+  e.target.value = digits ? Number(digits).toLocaleString("id-ID") : "";
+});
+
+function resetDebtForm() {
+  state.editingDebtId = null;
+  $("#debt-form").reset();
+  $("#debt-start").value = todayStr();
+  setDebtType("hutang");
+  $("#debt-form-title").textContent = "Tambah Hutang";
+  $("#debt-submit").textContent = "Simpan";
+  $("#debt-form").hidden = true;
+}
+$("#debt-cancel").addEventListener("click", resetDebtForm);
+$("#debt-add-btn").addEventListener("click", () => {
+  resetDebtForm();
+  $("#debt-form").hidden = false;
+  window.scrollTo(0, document.body.scrollHeight);
+});
+$("#debt-filter-status").addEventListener("change", () => loadDebts().catch((e) => toast(e.message, false)));
+
+function debtStatus(d) {
+  if (d.status === "lunas") return { key: "lunas", label: "✅ Lunas", cls: "lunas" };
+  if (d.due_date && d.due_date < todayStr()) return { key: "overdue", label: "⚠️ Lewat tenggat", cls: "overdue" };
+  return { key: "belum", label: "Belum lunas", cls: "belum" };
+}
+
+async function loadDebts() {
+  const status = $("#debt-filter-status").value;
+  const { debts } = await api("/api/debts" + (status ? `?status=${status}` : ""));
+  state.debts = debts;
+  const today = todayStr();
+  let owe = 0, owed = 0, overdue = 0;
+  for (const d of debts) {
+    if (d.status === "belum") {
+      if (d.type === "piutang") owed += d.amount;
+      else owe += d.amount;
+      if (d.due_date && d.due_date < today) overdue++;
+    }
+  }
+  $("#debt-stat-owe").textContent = fmtIDR(owe);
+  $("#debt-stat-owed").textContent = fmtIDR(owed);
+  $("#debt-stat-overdue").textContent = overdue;
+  $("#debt-list").innerHTML = debts.length
+    ? debts.map(debtRow).join("")
+    : `<p class="muted">Belum ada data hutang.</p>`;
+  document.querySelectorAll("[data-debt-toggle]").forEach((b) => b.addEventListener("click", () => toggleDebt(b.dataset.debtToggle)));
+  document.querySelectorAll("[data-debt-edit]").forEach((b) => b.addEventListener("click", () => startEditDebt(b.dataset.debtEdit)));
+  document.querySelectorAll("[data-debt-del]").forEach((b) => b.addEventListener("click", () => delDebt(b.dataset.debtDel)));
+}
+
+function debtRow(d) {
+  const st = debtStatus(d);
+  const isHutang = d.type !== "piutang";
+  return `
+  <div class="tx-row ${isHutang ? "out" : "in"}${st.key === "lunas" ? " debt-lunas" : ""}">
+    <div class="tx-ico">${isHutang ? "🔴" : "🟢"}</div>
+    <div class="tx-main"><b>${escHtml(d.person)}</b>
+      <span class="muted">${isHutang ? "Saya berhutang" : "Menghutangi"} • Mulai ${fmtDate(d.start_date)}${d.due_date ? " • Tenggat " + fmtDate(d.due_date) : " • Tanpa tenggat"}${d.input_by ? " • 👤 " + escHtml(d.input_by) : ""}${d.note ? " • " + escHtml(d.note) : ""}</span>
+      <span class="debt-badge ${st.cls}">${st.label}</span>
+    </div>
+    <div class="tx-amt">${fmtIDR(d.amount)}</div>
+    <div class="tx-act">
+      <button class="btn sm" data-debt-toggle="${d.id}">${d.status === "lunas" ? "Batal lunas" : "Lunas"}</button>
+      <button class="btn sm" data-debt-edit="${d.id}">Ubah</button>
+      <button class="btn sm danger" data-debt-del="${d.id}">Hapus</button>
+    </div>
+  </div>`;
+}
+
+async function toggleDebt(id) {
+  const d = state.debts.find((x) => x.id === id);
+  if (!d) return;
+  try {
+    await api("/api/debts/" + id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: d.status === "lunas" ? "belum" : "lunas" }),
+    });
+    toast(d.status === "lunas" ? "Status dibatalkan" : "Lunas! 🎉");
+    await loadDebts();
+  } catch (e) {
+    toast(e.message, false);
+  }
+}
+
+async function delDebt(id) {
+  if (!confirm("Hapus data hutang ini?")) return;
+  try {
+    await api("/api/debts/" + id, { method: "DELETE" });
+    toast("Dihapus 🗑️");
+    await loadDebts();
+  } catch (e) {
+    toast(e.message, false);
+  }
+}
+
+function startEditDebt(id) {
+  const d = state.debts.find((x) => x.id === id);
+  if (!d) return;
+  state.editingDebtId = id;
+  $("#debt-form").hidden = false;
+  setDebtType(d.type);
+  $("#debt-form-title").textContent = "Ubah Hutang";
+  $("#debt-person").value = d.person;
+  $("#debt-start").value = d.start_date;
+  $("#debt-due").value = d.due_date || "";
+  $("#debt-amount").value = Number(d.amount).toLocaleString("id-ID");
+  $("#debt-note").value = d.note || "";
+  const inpSel = $("#debt-inputter");
+  if (d.input_by && ![...inpSel.options].some((o) => o.value === d.input_by)) {
+    const opt = document.createElement("option");
+    opt.textContent = d.input_by;
+    inpSel.appendChild(opt);
+  }
+  if (d.input_by) inpSel.value = d.input_by;
+  $("#debt-submit").textContent = "Simpan Perubahan";
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+$("#debt-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("#debt-submit");
+  btn.disabled = true;
+  try {
+    const amount = parseInt(($("#debt-amount").value || "").replace(/\D/g, ""), 10);
+    if (!amount || amount <= 0) throw new Error("Nominal harus lebih dari 0");
+    const person = $("#debt-person").value.trim();
+    if (!person) throw new Error("Nama orang harus diisi");
+    const body = {
+      type: state.debtType,
+      person,
+      amount,
+      start_date: $("#debt-start").value,
+      due_date: $("#debt-due").value || "",
+      note: $("#debt-note").value.trim(),
+      input_by: $("#debt-inputter").value || "",
+    };
+    if (state.editingDebtId) {
+      await api("/api/debts/" + state.editingDebtId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      toast("Hutang diperbarui ✅");
+    } else {
+      await api("/api/debts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      toast("Tersimpan ✅ — notif dikirim ke Telegram");
+    }
+    resetDebtForm();
+    await loadDebts();
+  } catch (err) {
+    toast(err.message, false);
+  }
+  btn.disabled = false;
 });
 
 // ---------------- mode borongan ----------------

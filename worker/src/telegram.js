@@ -81,10 +81,44 @@ export async function sendPhotoByFileId(env, fileId, caption) {
   }
 }
 
-// Kirim pesan tes — mengembalikan {ok:true} atau {ok:false, error}.
-// Dipakai tombol "Tes Telegram" di aplikasi biar masalah config langsung kelihatan.
-export async function testTelegram(env) {
-  if (!env.TELEGRAM_BOT_TOKEN) return { ok: false, error: "TELEGRAM_BOT_TOKEN kosong di worker" };
+// ---------- notifikasi hutang & piutang ----------
+export function debtMessage(d) {
+  const isHutang = d.type !== "piutang";
+  const emoji = isHutang ? "🔴" : "🟢";
+  const label = isHutang ? "HUTANG BARU" : "PIUTANG BARU";
+  const lines = [
+    `${emoji} <b>${label}</b>`,
+    `${isHutang ? "Ke" : "Dari"}: <b>${escapeHtml(d.person)}</b>`,
+    `Nominal : <b>${formatIDR(d.amount)}</b>`,
+    `Mulai   : ${escapeHtml(d.start_date)}`,
+  ];
+  if (d.due_date) lines.push(`Tenggat : ${escapeHtml(d.due_date)}`);
+  if (d.input_by) lines.push(`👤 Input oleh: ${escapeHtml(d.input_by)}`);
+  if (d.note) lines.push(`Catatan : ${escapeHtml(d.note)}`);
+  return lines.join("\n");
+}
+
+export async function notifyDebt(env, debt) {
+  try {
+    await tgSend(env, "sendMessage", { text: debtMessage(debt), parse_mode: "HTML" });
+  } catch (e) {
+    console.log("notifyDebt failed:", e?.message || e);
+  }
+}
+
+export async function notifyDebtPaid(env, d) {
+  try {
+    const isHutang = d.type !== "piutang";
+    const text =
+      `✅ <b>${isHutang ? "HUTANG LUNAS" : "PIUTANG LUNAS"}</b>\n` +
+      `${isHutang ? "Ke" : "Dari"}: <b>${escapeHtml(d.person)}</b>\n` +
+      `Nominal : <b>${formatIDR(d.amount)}</b>`;
+    await tgSend(env, "sendMessage", { text, parse_mode: "HTML" });
+  } catch (e) {
+    console.log("notifyDebtPaid failed:", e?.message || e);
+  }
+}
+export async function testTelegram(env) {  if (!env.TELEGRAM_BOT_TOKEN) return { ok: false, error: "TELEGRAM_BOT_TOKEN kosong di worker" };
   if (!env.TELEGRAM_CHAT_ID) return { ok: false, error: "TELEGRAM_CHAT_ID kosong di worker" };
   try {
     const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {

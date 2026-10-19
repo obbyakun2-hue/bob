@@ -3,7 +3,7 @@
 
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
-import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram } from "./telegram.js";
+import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram, notifyDebt, notifyDebtPaid } from "./telegram.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -388,6 +388,92 @@ export default {
           if (row?.receipt_key && env.RECEIPTS) {
             try { await env.RECEIPTS.delete(row.receipt_key); } catch { /* abaikan */ }
           }
+          return json({ ok: true });
+        }
+
+        return json({ error: "method not allowed" }, 405);
+      }
+
+      // ---------- hutang & piutang ----------
+      if (path === "/api/debts") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+
+        if (request.method === "GET") {
+          const status = url.searchParams.get("status");
+          const conds = [];
+          const params = [];
+          if (status === "belum" || status === "lunas") { conds.push("status = ?"); params.push(status); }
+          const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
+          const { results } = await env.DB.prepare(
+            `SELECT * FROM debts ${where} ORDER BY status ASC, due_date ASC, created_at DESC`
+          ).bind(...params).all();
+          return json({ debts: results || [] });
+        }
+
+        if (request.method === "POST") {
+          const b = await request.json().catch(() => ({}));
+          const type = b.type === "piutang" ? "piutang" : "hutang";
+          const person = String(b.person || "").trim().slice(0, 80);
+          const amount = Math.floor(Number(b.amount) || 0);
+          const start_date = String(b.start_date || "").slice(0, 10);
+          const due_date = String(b.due_date || "").slice(0, 10);
+          const note = String(b.note || "").slice(0, 500);
+          const input_by = String(b.input_by || "").trim().slice(0, 40);
+          if (!person) return json({ error: "Nama orang harus diisi" }, 400);
+          if (amount <= 0) return json({ error: "Nominal harus lebih dari 0" }, 400);
+          if (!DATE_RE.test(start_date)) return json({ error: "Tanggal mulai tidak valid" }, 400);
+          if (due_date && !DATE_RE.test(due_date)) return json({ error: "Tenggat tidak valid" }, 400);
+          const debt = {
+            id: crypto.randomUUID(), type, person, amount, start_date, due_date,
+            note, status: "belum", input_by, created_at: new Date().toISOString(),
+          };
+          await env.DB.prepare(
+            "INSERT INTO debts (id, type, person, amount, start_date, due_date, note, status, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(debt.id, debt.type, debt.person, debt.amount, debt.start_date, debt.due_date, debt.note, debt.status, debt.input_by, debt.created_at).run();
+          ctx.waitUntil(notifyDebt(env, debt));
+          return json({ debt }, 201);
+        }
+
+        return json({ error: "method not allowed" }, 405);
+      }
+
+      const mDebt = path.match(/^\/api\/debts\/([A-Za-z0-9-]+)$/);
+      if (mDebt) {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        const id = mDebt[1];
+
+        if (request.method === "PUT") {
+          const b = await request.json().catch(() => ({}));
+          const fields = [];
+          const params = [];
+          const setIf = (col, val, valid) => {
+            if (val !== undefined && (!valid || valid(val))) {
+              fields.push(`${col} = ?`);
+              params.push(val);
+            }
+          };
+          if (b.type === "hutang" || b.type === "piutang") { fields.push("type = ?"); params.push(b.type); }
+          setIf("person", String(b.person || "").trim().slice(0, 80), (v) => v.length > 0);
+          setIf("amount", Math.floor(Number(b.amount) || 0), (v) => v > 0);
+          setIf("start_date", String(b.start_date || "").slice(0, 10), (v) => DATE_RE.test(v));
+          if (b.due_date !== undefined) {
+            const dv = String(b.due_date || "").slice(0, 10);
+            if (dv && !DATE_RE.test(dv)) return json({ error: "Tenggat tidak valid" }, 400);
+            fields.push("due_date = ?"); params.push(dv);
+          }
+          setIf("note", String(b.note ?? "").slice(0, 500));
+          if (b.status === "lunas" || b.status === "belum") { fields.push("status = ?"); params.push(b.status); }
+          if (b.input_by !== undefined) { fields.push("input_by = ?"); params.push(String(b.input_by).trim().slice(0, 40)); }
+          if (!fields.length) return json({ error: "Tidak ada perubahan" }, 400);
+          params.push(id);
+          await env.DB.prepare(`UPDATE debts SET ${fields.join(", ")} WHERE id = ?`).bind(...params).run();
+          const row = await env.DB.prepare("SELECT * FROM debts WHERE id = ?").bind(id).first();
+          if (b.status === "lunas" && row) ctx.waitUntil(notifyDebtPaid(env, row));
+          return json({ debt: row });
+        }
+
+        if (request.method === "DELETE") {
+          await env.DB.prepare("DELETE FROM debts WHERE id = ?").bind(id).run();
           return json({ ok: true });
         }
 

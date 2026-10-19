@@ -315,6 +315,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .sel-bar input[type="checkbox"], .tx-check { width: 18px; height: 18px; margin: 0; padding: 0; flex-shrink: 0; accent-color: #10b981; cursor: pointer; }
 #sel-count { flex: 1; font-size: 0.85em; }
 
+/* ---------- hutang ---------- */
+.debt-badge { display: inline-block; font-size: 0.78em; font-weight: 700; padding: 2px 10px; border-radius: 20px; margin-top: 5px; width: fit-content; }
+.debt-badge.belum { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+.debt-badge.overdue { background: rgba(244, 63, 94, 0.18); color: #e11d48; }
+.debt-badge.lunas { background: rgba(16, 185, 129, 0.15); color: #059669; }
+.tx-row.debt-lunas { opacity: 0.62; }
+
 /* ---------- borongan ---------- */
 #bulk-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .bulk-row {
