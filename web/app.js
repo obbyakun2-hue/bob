@@ -153,7 +153,7 @@ $("#txd-del").addEventListener("click", async () => {
   if (!id) return;
   if (!confirm("Hapus transaksi ini?")) return;
   try {
-    await api("/api/tx/" + id, { method: "DELETE" });
+    await api("/api/transactions/" + id, { method: "DELETE" });
     toast("Dihapus 🗑️");
     closeTxDetail();
     if (currentTab === "dashboard") loadDashboard().catch(() => {});
