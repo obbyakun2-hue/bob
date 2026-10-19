@@ -1,5 +1,10 @@
 # TEMPLATE — placeholder ${...} diganti dari GitHub Secrets oleh workflow deploy.
 # Jangan isi nilai asli di sini.
+#
+# PENTING: secret (JWT_SECRET, ADMIN_*, TELEGRAM_*) TIDAK ditaruh di [vars]
+# supaya tidak tersimpan sebagai plaintext di dashboard Cloudflare.
+# Workflow mengirimnya via `wrangler secret bulk` (terenkripsi, tak bisa
+# dibaca balik). Untuk dev lokal, pakai file .dev.vars (sudah di .gitignore).
 
 name = "${NAME}"
 main = "src/index.js"
@@ -17,10 +22,3 @@ database_id = "${D1_DATABASE_ID}"
 [[kv_namespaces]]
 binding = "RECEIPTS"
 id = "${KV_NAMESPACE_ID}"
-
-[vars]
-JWT_SECRET = "${JWT_SECRET}"
-ADMIN_USERNAME = "${ADMIN_USERNAME}"
-ADMIN_PASSWORD = "${ADMIN_PASSWORD}"
-TELEGRAM_BOT_TOKEN = "${TELEGRAM_BOT_TOKEN}"
-TELEGRAM_CHAT_ID = "${TELEGRAM_CHAT_ID}"

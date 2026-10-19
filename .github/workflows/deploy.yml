@@ -68,15 +68,13 @@ jobs:
           [ -n "$TELEGRAM_CHAT_ID" ] || echo "::warning:: TELEGRAM_CHAT_ID kosong — notif Telegram nonaktif."
           CONFIG_FILE="wrangler-action.toml"
 
-          # Escape karakter spesial sed (| & \) pada nilai secret
-          esc() { printf '%s' "$1" | sed -e 's/[|&\\]/\\&/g'; }
+          # Escape karakter spesial sed (| & " \) pada nilai yang disubstitusi.
+          # Secret TIDAK disubstitusi ke TOML lagi — dikirim via `wrangler secret bulk`
+          # (step terpisah di bawah) supaya tersimpan terenkripsi di Cloudflare,
+          # bukan plaintext di [vars].
+          esc() { printf '%s' "$1" | sed -e 's/[|&"\\]/\\&/g'; }
 
           sed -i "s|\${NAME}|$(esc "$NAME")|g" "$CONFIG_FILE"
-          sed -i "s|\${JWT_SECRET}|$(esc "$JWT_SECRET")|g" "$CONFIG_FILE"
-          sed -i "s|\${ADMIN_USERNAME}|$(esc "$ADMIN_USERNAME")|g" "$CONFIG_FILE"
-          sed -i "s|\${ADMIN_PASSWORD}|$(esc "$ADMIN_PASSWORD")|g" "$CONFIG_FILE"
-          sed -i "s|\${TELEGRAM_BOT_TOKEN}|$(esc "$TELEGRAM_BOT_TOKEN")|g" "$CONFIG_FILE"
-          sed -i "s|\${TELEGRAM_CHAT_ID}|$(esc "$TELEGRAM_CHAT_ID")|g" "$CONFIG_FILE"
 
           echo "✅ Environment siap."
 
@@ -197,6 +195,25 @@ jobs:
             exit 1
           fi
           echo "✅ Semua placeholder terisi, siap deploy."
+
+      - name: 🔐 Push secrets ke Cloudflare
+        working-directory: ./worker
+        run: |
+          echo "🔐 Mengirim secrets ke Cloudflare (tersimpan terenkripsi)..."
+          # Nilai kosong difilter agar tidak menimpa secret lama dengan string kosong.
+          # Catatan: kalau sebuah secret dulunya diisi lalu dikosongkan di GitHub Secrets,
+          # hapus manual sekali via: pnpm wrangler secret delete NAMA_SECRET
+          SECRETS_FILE=$(mktemp)
+          jq -n '{
+            JWT_SECRET: $ENV.JWT_SECRET,
+            ADMIN_USERNAME: $ENV.ADMIN_USERNAME,
+            ADMIN_PASSWORD: $ENV.ADMIN_PASSWORD,
+            TELEGRAM_BOT_TOKEN: $ENV.TELEGRAM_BOT_TOKEN,
+            TELEGRAM_CHAT_ID: $ENV.TELEGRAM_CHAT_ID
+          } | with_entries(select(.value != ""))' > "$SECRETS_FILE"
+          pnpm wrangler secret bulk -c wrangler-action.toml "$SECRETS_FILE"
+          rm -f "$SECRETS_FILE"
+          echo "✅ Secrets tersimpan."
 
       - name: 🚀 Deploy ke Cloudflare Workers
         id: deploy

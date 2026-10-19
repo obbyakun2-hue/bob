@@ -1,4 +1,4 @@
-# 💰 Uang Tracker
+# 💰 KIBY — Uang Tracker
 
 Aplikasi pencatatan uang masuk & keluar ala "catatan keuangan profesional":
 dashboard ringkasan bulanan, grafik arus kas harian, breakdown per kategori,
@@ -49,6 +49,9 @@ Buka repo → **Settings → Secrets and variables → Actions → New repositor
 | `NAME` | ⚪ | Nama worker & database (default: `uang-tracker`) |
 
 > Semua konfigurasi **hanya** dari Secrets — tidak ada secret yang di-hardcode di repo.
+> Saat deploy, secret dikirim ke Cloudflare via `wrangler secret bulk` sehingga
+> tersimpan **terenkripsi** (tidak terlihat plaintext di dashboard Cloudflare
+> seperti kalau ditaruh di `[vars]`).
 
 ## 3. Deploy
 
@@ -58,13 +61,28 @@ Bisa juga dijalankan manual via tab **Actions → workflow_dispatch**.
 
 Alur workflow (diambil dari pola cloud-mail, versi ramping):
 1. Checkout → setup pnpm + Node → `pnpm install --frozen-lockfile`
-2. Validasi secrets → substitusi placeholder di `worker/wrangler-action.toml`
+2. Validasi secrets → substitusi placeholder non-secret di `worker/wrangler-action.toml`
 3. Cek/buat KV namespace & database D1 (pakai secret kalau diisi, kalau tidak cari berdasarkan nama, kalau belum ada dibuatkan otomatis)
-4. `wrangler deploy` → dapat URL `https://<nama>.workers.dev`
-5. Panggil `/api/init/<JWT_SECRET>` → buat tabel + seed 14 kategori default
+4. Push secrets via `wrangler secret bulk` → tersimpan terenkripsi di Cloudflare
+5. `wrangler deploy` → dapat URL `https://<nama>.workers.dev`
+6. Panggil `/api/init/<JWT_SECRET>` → buat tabel + seed 14 kategori default
 
 Setelah deploy sukses, buka URL workers.dev → login dengan `ADMIN_USERNAME` /
 `ADMIN_PASSWORD` → langsung bisa mencatat.
+
+## 3a. Dev lokal & test
+
+```bash
+cd worker
+# Dev lokal: taruh secret di .dev.vars (JANGAN di-commit — sudah di .gitignore)
+# contoh isi:
+# JWT_SECRET=xxx
+# ADMIN_USERNAME=xxx
+# ADMIN_PASSWORD=xxx
+pnpm dev
+# Jalankan unit test (node:test, tanpa dependency tambahan)
+pnpm test
+```
 
 ## 4. Struktur project
 
@@ -75,6 +93,7 @@ uang-tracker/
 │   ├── wrangler-action.toml       # template, placeholder ${...} diisi CI
 │   ├── package.json
 │   ├── pnpm-lock.yaml
+│   ├── test/                      # unit test (node:test) → `pnpm test`
 │   └── src/
 │       ├── index.js               # router API + serve frontend
 │       ├── db.js                  # skema D1 + seed kategori

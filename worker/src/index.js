@@ -8,6 +8,45 @@ import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTeleg
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// ---- Rate limit login (anti brute-force): maks 10 percobaan / 5 menit / IP ----
+// Disimpan di KV supaya berlaku lintas isolate. Gagal-terbuka (fail open)
+// kalau KV belum tersedia — login tetap jalan.
+const LOGIN_RL_MAX = 10;
+const LOGIN_RL_WINDOW_MS = 5 * 60 * 1000;
+async function readLoginRec(env, ip) {
+  if (!env.RECEIPTS) return null;
+  try {
+    const raw = await env.RECEIPTS.get(`rl:login:${ip}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+// >0 = diblokir, kembalikan sisa detik tunggu. 0 = boleh lanjut.
+async function loginBlockedSeconds(env, request) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const rec = await readLoginRec(env, ip);
+  if (!rec || Date.now() - rec.t > LOGIN_RL_WINDOW_MS) return 0;
+  if (rec.n < LOGIN_RL_MAX) return 0;
+  return Math.max(1, Math.ceil((LOGIN_RL_WINDOW_MS - (Date.now() - rec.t)) / 1000));
+}
+async function loginAttempt(env, request, success) {
+  if (!env.RECEIPTS) return;
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const key = `rl:login:${ip}`;
+  if (success) {
+    try { await env.RECEIPTS.delete(key); } catch { /* abaikan */ }
+    return;
+  }
+  const now = Date.now();
+  let rec = await readLoginRec(env, ip);
+  if (!rec || now - rec.t > LOGIN_RL_WINDOW_MS) rec = { n: 0, t: now };
+  rec.n += 1;
+  try {
+    await env.RECEIPTS.put(key, JSON.stringify(rec), { expirationTtl: 300 });
+  } catch { /* abaikan */ }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -37,6 +76,13 @@ export default {
 
       // ---------- login (1 user) ----------
       if (path === "/api/login" && request.method === "POST") {
+        const waitSecs = await loginBlockedSeconds(env, request);
+        if (waitSecs > 0) {
+          return new Response(JSON.stringify({ error: "Terlalu banyak percobaan, coba lagi sebentar" }), {
+            status: 429,
+            headers: { "Content-Type": "application/json", "Retry-After": String(waitSecs) },
+          });
+        }
         const body = await request.json().catch(() => ({}));
         const username = String(body.username || "").trim();
         const password = String(body.password || "");
@@ -45,8 +91,10 @@ export default {
           username === env.ADMIN_USERNAME &&
           (await checkPassword(password, env.ADMIN_PASSWORD))
         ) {
+          await loginAttempt(env, request, true);
           return json({ token: await createToken(username, env.JWT_SECRET) });
         }
+        await loginAttempt(env, request, false);
         return json({ error: "Username atau password salah" }, 401);
       }
 
@@ -94,6 +142,7 @@ export default {
         const form = await request.formData().catch(() => null);
         const file = form ? form.get("file") : null;
         if (!file || typeof file === "string") return json({ error: "File tidak ditemukan" }, 400);
+        if (file.type && !file.type.startsWith("image/")) return json({ error: "File harus berupa gambar" }, 400);
         if (file.size > 5 * 1024 * 1024) return json({ error: "Ukuran file maksimal 5MB" }, 400);
 
         const meta = {
@@ -175,7 +224,7 @@ export default {
                 ? "image/webp"
                 : "image/jpeg";
             return new Response(dlRes.body, {
-              headers: { "Content-Type": ct, "Cache-Control": "public, max-age=86400" },
+              headers: { "Content-Type": ct, "Cache-Control": "private, max-age=86400" },
             });
           } catch {
             return json({ error: "not found" }, 404);
@@ -195,7 +244,7 @@ export default {
           return new Response(value, {
             headers: {
               "Content-Type": metadata?.contentType || "image/webp",
-              "Cache-Control": "public, max-age=31536000",
+              "Cache-Control": "private, max-age=31536000",
             },
           });
         }
@@ -355,6 +404,8 @@ export default {
 
         if (request.method === "PUT") {
           const b = await request.json().catch(() => ({}));
+          const oldRow = await env.DB.prepare("SELECT receipt_key FROM transactions WHERE id = ?").bind(id).first();
+          const oldReceiptKey = oldRow?.receipt_key || "";
           const fields = [];
           const params = [];
           const setIf = (col, val, valid) => {
@@ -367,7 +418,11 @@ export default {
           setIf("type", b.type === "in" ? "in" : b.type === "out" ? "out" : undefined);
           setIf("category", String(b.category || "").slice(0, 80), (v) => v.length > 0);
           setIf("amount", Math.floor(Number(b.amount) || 0), (v) => v > 0);
-          setIf("note", String(b.note ?? "").slice(0, 500));
+          // note hanya diubah kalau dikirim eksplisit (jangan timpa saat partial update)
+          if (b.note !== undefined) {
+            fields.push("note = ?");
+            params.push(String(b.note).slice(0, 500));
+          }
           if (b.receipt_key !== undefined) {
             fields.push("receipt_key = ?");
             params.push(String(b.receipt_key).slice(0, 200));
@@ -381,6 +436,12 @@ export default {
           await env.DB.prepare(`UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`)
             .bind(...params).run();
           const row = await env.DB.prepare("SELECT * FROM transactions WHERE id = ?").bind(id).first();
+          // Bersihkan file struk lama di KV kalau diganti/dihapus — jangan jadi yatim.
+          // (Struk Telegram tidak bisa dihapus otomatis; itu keterbatasan API.)
+          const newReceiptKey = b.receipt_key !== undefined ? String(b.receipt_key).slice(0, 200) : oldReceiptKey;
+          if (oldReceiptKey && oldReceiptKey !== newReceiptKey && oldReceiptKey.startsWith("kv:") && env.RECEIPTS) {
+            try { await env.RECEIPTS.delete(oldReceiptKey); } catch { /* abaikan */ }
+          }
           return json({ transaction: row });
         }
 
@@ -464,7 +525,12 @@ export default {
             if (dv && !DATE_RE.test(dv)) return json({ error: "Tenggat tidak valid" }, 400);
             fields.push("due_date = ?"); params.push(dv);
           }
-          setIf("note", String(b.note ?? "").slice(0, 500));
+          // note hanya diubah kalau dikirim eksplisit (jangan timpa saat partial update,
+          // mis. toggle "lunas" yang cuma kirim {status})
+          if (b.note !== undefined) {
+            fields.push("note = ?");
+            params.push(String(b.note).slice(0, 500));
+          }
           if (b.status === "lunas" || b.status === "belum") { fields.push("status = ?"); params.push(b.status); }
           if (b.input_by !== undefined) { fields.push("input_by = ?"); params.push(String(b.input_by).trim().slice(0, 40)); }
           if (!fields.length) return json({ error: "Tidak ada perubahan" }, 400);
@@ -486,8 +552,11 @@ export default {
       // ---------- ringkasan bulanan ----------
       if (path === "/api/summary" && request.method === "GET") {
         if (!(await getAuthUser(request, env))) return unauthorized();
-        const month = url.searchParams.get("month") || new Date().toISOString().slice(0, 7);
-        if (!/^\d{4}-\d{2}$/.test(month)) return json({ error: "Bulan tidak valid (YYYY-MM)" }, 400);
+        const monthParam = url.searchParams.get("month");
+        if (monthParam && !/^\d{4}-\d{2}$/.test(monthParam)) return json({ error: "Bulan tidak valid (YYYY-MM)" }, 400);
+        // Default: bulan berjalan WIB (aplikasi Indonesia-only).
+        // Frontend selalu kirim month eksplisit, jadi ini jarang kepakai.
+        const month = monthParam || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 7);
         const [y, mo] = month.split("-").map(Number);
         const daysInMonth = new Date(y, mo, 0).getDate();
         const start = `${month}-01`;

@@ -524,16 +524,45 @@ async function delTx(id) {
   }
 }
 
-$("#f-export").addEventListener("click", () => {
-  const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Diinput oleh", "Catatan"]];
-  for (const t of state.lastTx)
-    rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, t.input_by || "", t.note || ""]);
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
-  a.download = "transaksi.csv";
-  a.click();
-  toast("CSV diunduh");
+$("#f-export").addEventListener("click", async () => {
+  const btn = $("#f-export");
+  btn.disabled = true;
+  try {
+    toast("Menyiapkan CSV...");
+    // Ambil SEMUA halaman sesuai filter aktif — bukan cuma 200 baris pertama.
+    const base = new URLSearchParams();
+    if ($("#f-from").value) base.set("from", $("#f-from").value);
+    if ($("#f-to").value) base.set("to", $("#f-to").value);
+    if ($("#f-type").value) base.set("type", $("#f-type").value);
+    if ($("#f-cat").value) base.set("category", $("#f-cat").value);
+    if ($("#f-inputter").value) base.set("input_by", $("#f-inputter").value);
+    if ($("#f-q").value.trim()) base.set("q", $("#f-q").value.trim());
+    const all = [];
+    let offset = 0;
+    const LIM = 500;
+    for (;;) {
+      const p = new URLSearchParams(base);
+      p.set("limit", String(LIM));
+      p.set("offset", String(offset));
+      const { transactions, total } = await api("/api/transactions?" + p.toString());
+      all.push(...transactions);
+      if (all.length >= total || transactions.length < LIM) break;
+      offset += LIM;
+    }
+    const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Diinput oleh", "Catatan"]];
+    for (const t of all)
+      rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, t.input_by || "", t.note || ""]);
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
+    a.download = `transaksi-${todayStr()}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(`${all.length} baris diunduh ✅`);
+  } catch (e) {
+    toast(e.message, false);
+  }
+  btn.disabled = false;
 });
 
 // ---------------- hutang & piutang ----------------
@@ -575,16 +604,19 @@ function debtStatus(d) {
 
 async function loadDebts() {
   const status = $("#debt-filter-status").value;
-  const { debts } = await api("/api/debts" + (status ? `?status=${status}` : ""));
+  // Daftar tampil mengikuti filter, tapi statistik SELALU dari yang belum lunas
+  // (biar ganti filter ke "Lunas" tidak mengnolkan angka).
+  const [{ debts }, { debts: unpaid }] = await Promise.all([
+    api("/api/debts" + (status ? `?status=${status}` : "")),
+    api("/api/debts?status=belum"),
+  ]);
   state.debts = debts;
   const today = todayStr();
   let owe = 0, owed = 0, overdue = 0;
-  for (const d of debts) {
-    if (d.status === "belum") {
-      if (d.type === "piutang") owed += d.amount;
-      else owe += d.amount;
-      if (d.due_date && d.due_date < today) overdue++;
-    }
+  for (const d of unpaid) {
+    if (d.type === "piutang") owed += d.amount;
+    else owe += d.amount;
+    if (d.due_date && d.due_date < today) overdue++;
   }
   $("#debt-stat-owe").textContent = fmtIDR(owe);
   $("#debt-stat-owed").textContent = fmtIDR(owed);
@@ -819,9 +851,8 @@ $("#bulk-submit").addEventListener("click", async () => {
     const uploaded = await Promise.all(
       items.map(async (it, i) => {
         if (!it.file) return { ...it, receipt_key: "", notified: false };
-        const webp = await compressToWebp(it.file);
         const fd = new FormData();
-        fd.append("file", new File([webp], "struk.webp", { type: "image/webp" }));
+        fd.append("file", await toUploadFile(it.file));
         fd.append("date", it.date);
         fd.append("type", it.type);
         fd.append("category", it.category);
@@ -973,6 +1004,14 @@ async function compressToWebp(file, maxDim = 1280, quality = 0.75) {
   }
 }
 
+// Siapkan file untuk upload: kalau kompres berhasil → WebP; kalau gagal →
+// pakai file asli APA ADANYA (nama & tipe asli) supaya tidak dilabeli webp keliru.
+async function toUploadFile(file) {
+  const out = await compressToWebp(file);
+  if (out === file) return file;
+  return new File([out], "struk.webp", { type: "image/webp" });
+}
+
 $("#tx-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("#tx-submit");
@@ -993,10 +1032,9 @@ $("#tx-form").addEventListener("submit", async (e) => {
     let via = "";
     const file = $("#tx-file").files[0];
     if (file) {
-      // Kompres ke WebP dulu — hemat storage
-      const webp = await compressToWebp(file);
+      // Kompres ke WebP dulu — hemat storage (gagal → file asli apa adanya)
       const fd = new FormData();
-      fd.append("file", new File([webp], "struk.webp", { type: "image/webp" }));
+      fd.append("file", await toUploadFile(file));
       // Meta transaksi ikut dikirim: kalau upload via Telegram, foto + caption
       // notifikasi langsung dikirim sekali jalan (tidak dobel saat transaksi dibuat)
       fd.append("date", txData.date);

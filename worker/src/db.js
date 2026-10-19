@@ -67,7 +67,4 @@ export async function initDb(db) {
     .prepare(`INSERT OR IGNORE INTO inputters (name) VALUES ${ipPlaceholders}`)
     .bind(...DEFAULT_INPUTTERS)
     .run();
-  // Sekali jalan (2026-10-20): "rofek" dihapus dari daftar default,
-  // digantikan "kita". Idempoten — aman dijalankan ulang.
-  await db.prepare("DELETE FROM inputters WHERE name = ?").bind("rofek").run();
 }
