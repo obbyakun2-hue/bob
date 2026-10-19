@@ -29,7 +29,7 @@ const escHtml = (s) =>
 const CAT_ICONS = {
   "Gaji": "💼", "Bonus": "🎁", "Usaha / Freelance": "🧑‍💻", "Hadiah": "🎀", "Lainnya (Masuk)": "📥",
   "Makan & Minum": "🍜", "Transport / Bensin": "⛽", "Belanja": "🛍️", "Tagihan & Listrik": "💡",
-  "Pulsa & Kuota": "📱", "Kesehatan": "🏥", "Hiburan & Game": "🎮", "Tabungan": "🏦", "Lainnya (Keluar)": "📤",
+  "Pulsa & Kuota": "📱", "Kesehatan": "🏥", "Hiburan & Game": "🎮", "Tabungan": "🏦", "Vape": "💨", "Lainnya (Keluar)": "📤",
 };
 const catIcon = (name, type) => CAT_ICONS[name] || (type === "in" ? "💰" : "💸");
 

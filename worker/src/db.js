@@ -24,6 +24,7 @@ const DEFAULT_CATEGORIES = [
   ["Kesehatan", "out"],
   ["Hiburan & Game", "out"],
   ["Tabungan", "out"],
+  ["Vape", "out"],
   ["Lainnya (Keluar)", "out"],
 ];
 
@@ -39,13 +40,13 @@ export async function initDb(db) {
     }
   }
   const row = await db.prepare("SELECT COUNT(*) AS c FROM categories").first();
-  if (!row || row.c === 0) {
-    // Satu statement multi-VALUES (tanpa batch) — pola paling aman di semua runtime.
-    const placeholders = DEFAULT_CATEGORIES.map(() => "(?, ?)").join(", ");
-    const params = DEFAULT_CATEGORIES.flat();
-    await db
-      .prepare(`INSERT OR IGNORE INTO categories (name, type) VALUES ${placeholders}`)
-      .bind(...params)
-      .run();
-  }
+  // Seed kategori default SELALU dijalankan dengan INSERT OR IGNORE —
+  // idempoten (tak ada duplikat), dan kategori default baru otomatis
+  // masuk ke database lama setiap init dipanggil (mis. habis deploy).
+  const placeholders = DEFAULT_CATEGORIES.map(() => "(?, ?)").join(", ");
+  const params = DEFAULT_CATEGORIES.flat();
+  await db
+    .prepare(`INSERT OR IGNORE INTO categories (name, type) VALUES ${placeholders}`)
+    .bind(...params)
+    .run();
 }
