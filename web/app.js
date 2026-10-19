@@ -267,6 +267,15 @@ function renderInputterSelects() {
     sel.innerHTML = state.inputters.map((n) => `<option>${escHtml(n)}</option>`).join("");
     if (state.inputters.includes(last)) sel.value = last;
   });
+  // Filter "penginput" di tab Transaksi ikut di-refresh
+  const f = $("#f-inputter");
+  if (f) {
+    const cur = f.value;
+    f.innerHTML =
+      `<option value="">Semua penginput</option>` +
+      state.inputters.map((n) => `<option>${escHtml(n)}</option>`).join("");
+    if (cur && state.inputters.includes(cur)) f.value = cur;
+  }
 }
 document.querySelectorAll(".inputter-select").forEach((sel) =>
   sel.addEventListener("change", () => localStorage.setItem("uang_inputter", sel.value))
@@ -315,6 +324,7 @@ async function loadTx() {
   if ($("#f-to").value) p.set("to", $("#f-to").value);
   if ($("#f-type").value) p.set("type", $("#f-type").value);
   if ($("#f-cat").value) p.set("category", $("#f-cat").value);
+  if ($("#f-inputter").value) p.set("input_by", $("#f-inputter").value);
   if ($("#f-q").value.trim()) p.set("q", $("#f-q").value.trim());
   const { transactions } = await api("/api/transactions?" + p.toString());
   state.lastTx = transactions;

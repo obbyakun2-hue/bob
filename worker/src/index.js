@@ -218,6 +218,7 @@ export default {
           const to = url.searchParams.get("to");
           const type = url.searchParams.get("type");
           const category = url.searchParams.get("category");
+          const input_by = url.searchParams.get("input_by");
           const q = url.searchParams.get("q");
           const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 500);
           const offset = parseInt(url.searchParams.get("offset") || "0", 10) || 0;
@@ -227,6 +228,7 @@ export default {
           if (to && DATE_RE.test(to)) { conds.push("date <= ?"); params.push(to); }
           if (type === "in" || type === "out") { conds.push("type = ?"); params.push(type); }
           if (category) { conds.push("category = ?"); params.push(category); }
+          if (input_by) { conds.push("input_by = ?"); params.push(input_by); }
           if (q) { conds.push("note LIKE ?"); params.push(`%${q}%`); }
           const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
           const { results } = await env.DB.prepare(
