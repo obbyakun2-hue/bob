@@ -1,24 +1,13 @@
 // Skema & seed database D1 untuk app catatan uang.
 
-// JANGAN gabung multi-statement dalam satu string exec() — D1 pernah
-// gagal parse dengan error "incomplete input". Satu statement per exec().
+// Satu statement per exec(), dan semuanya SINGLE-LINE (tanpa newline).
+// Ditemukan 2026-10-20: newline di dalam string SQL tampaknya hilang dalam
+// perjalanan ke parser D1 ("incomplete input" selalu menunjuk baris pertama).
 const SCHEMA_STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY,
-    date TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('in', 'out')),
-    category TEXT NOT NULL,
-    amount INTEGER NOT NULL CHECK (amount >= 0),
-    note TEXT NOT NULL DEFAULT '',
-    receipt_key TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions (date)`,
-  `CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions (type)`,
-  `CREATE TABLE IF NOT EXISTS categories (
-    name TEXT PRIMARY KEY,
-    type TEXT NOT NULL CHECK (type IN ('in', 'out'))
-  )`,
+  "CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, date TEXT NOT NULL, type TEXT NOT NULL CHECK (type IN ('in', 'out')), category TEXT NOT NULL, amount INTEGER NOT NULL CHECK (amount >= 0), note TEXT NOT NULL DEFAULT '', receipt_key TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions (date)",
+  "CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions (type)",
+  "CREATE TABLE IF NOT EXISTS categories (name TEXT PRIMARY KEY, type TEXT NOT NULL CHECK (type IN ('in', 'out')))",
 ];
 
 const DEFAULT_CATEGORIES = [
