@@ -178,14 +178,15 @@ main { max-width: 980px; margin: 0 auto; padding: 22px 18px 10px; }
 /* ---------- form ---------- */
 label { display: block; margin-bottom: 13px; font-size: 0.88em; font-weight: 600; }
 label .hint { font-weight: 400; color: var(--muted); font-style: normal; }
-input, select {
+input, select, textarea {
   width: 100%; margin-top: 7px; padding: 11px 13px;
   border: 1.5px solid var(--border); border-radius: 13px;
   font-size: 0.98em; background: var(--card); color: var(--text);
   font-family: inherit; transition: border-color 0.15s, box-shadow 0.15s;
 }
-input:focus, select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }
-input::placeholder { color: var(--muted); opacity: 0.7; }
+textarea { resize: vertical; min-height: 76px; line-height: 1.45; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 
 .btn {
   border: 1px solid var(--border); background: var(--card); color: var(--text);
