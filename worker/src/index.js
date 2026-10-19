@@ -327,7 +327,7 @@ export default {
               ctx.waitUntil(notifyTransaction(env, tx, photoBytes));
             }
           }
-          return json({ transaction: tx }, 201);
+          return json({ transaction: tx, telegram: !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) }, 201);
         }
 
         // Hapus massal: body {ids: [...]} — dipakai checkbox "pilih semua".
@@ -393,7 +393,7 @@ export default {
         );
         // Rekap teks hanya untuk baris yang belum ternotifikasi via foto (anti dobel)
         if (recapTxs.length) ctx.waitUntil(notifyBatch(env, recapTxs, input_by));
-        return json({ count: txs.length, transactions: txs }, 201);
+        return json({ count: txs.length, transactions: txs, telegram: !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) }, 201);
       }
 
       // ---------- satu transaksi: ubah / hapus ----------
@@ -495,7 +495,7 @@ export default {
             "INSERT INTO debts (id, type, person, amount, start_date, due_date, note, status, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
           ).bind(debt.id, debt.type, debt.person, debt.amount, debt.start_date, debt.due_date, debt.note, debt.status, debt.input_by, debt.created_at).run();
           ctx.waitUntil(notifyDebt(env, debt));
-          return json({ debt }, 201);
+          return json({ debt, telegram: !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) }, 201);
         }
 
         return json({ error: "method not allowed" }, 405);

@@ -228,6 +228,19 @@
   <footer class="foot muted">💰 KIBY — data tersimpan aman di Cloudflare</footer>
 </div>
 
+<!-- DIALOG KONFIRMASI / PROMPT (pengganti confirm()/prompt() native) -->
+<div id="dlg" class="lightbox" hidden>
+  <div class="lightbox-backdrop" id="dlg-backdrop"></div>
+  <div class="lightbox-box dlg-box">
+    <p id="dlg-msg" class="dlg-msg"></p>
+    <input id="dlg-input" class="dlg-input" hidden />
+    <div class="row lightbox-actions">
+      <button id="dlg-cancel" class="btn sm">Batal</button>
+      <button id="dlg-ok" class="btn sm primary">Ya</button>
+    </div>
+  </div>
+</div>
+
 <!-- DETAIL TRANSAKSI -->
 <div id="tx-detail" class="lightbox" hidden>
   <div class="lightbox-backdrop" id="tx-detail-backdrop"></div>

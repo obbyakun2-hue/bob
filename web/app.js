@@ -72,6 +72,52 @@ function toast(msg, ok = true) {
   toastTimer = setTimeout(() => (t.className = ""), 2600);
 }
 
+// Dialog konfirmasi/prompt custom (pengganti confirm()/prompt() native).
+// Mengembalikan Promise: confirmDlg -> boolean, promptDlg -> string|null.
+let dlgResolve = null;
+function openDlg({ msg, input = false, okLabel = "Ya", danger = false }) {
+  return new Promise((resolve) => {
+    dlgResolve = resolve;
+    $("#dlg-msg").textContent = msg;
+    const inp = $("#dlg-input");
+    inp.hidden = !input;
+    if (input) inp.value = "";
+    const okBtn = $("#dlg-ok");
+    okBtn.textContent = okLabel;
+    okBtn.classList.toggle("danger", danger);
+    okBtn.classList.toggle("primary", !danger);
+    $("#dlg").hidden = false;
+    document.body.style.overflow = "hidden";
+    setTimeout(() => (input ? inp.focus() : okBtn.focus()), 30);
+  });
+}
+function closeDlg(result) {
+  $("#dlg").hidden = true;
+  document.body.style.overflow = "";
+  const r = dlgResolve;
+  dlgResolve = null;
+  if (r) r(result);
+}
+function confirmDlg(msg, okLabel = "Ya, hapus") {
+  return openDlg({ msg, okLabel, danger: true });
+}
+function promptDlg(msg, okLabel = "Simpan") {
+  return openDlg({ msg, input: true, okLabel }).then((v) => {
+    if (v === false) return null;
+    const s = String(v || "").trim();
+    return s ? s : null;
+  });
+}
+$("#dlg-ok").addEventListener("click", () => {
+  const inp = $("#dlg-input");
+  closeDlg(inp.hidden ? true : inp.value);
+});
+$("#dlg-cancel").addEventListener("click", () => closeDlg(false));
+$("#dlg-backdrop").addEventListener("click", () => closeDlg(false));
+document.addEventListener("keydown", (e) => {
+  if (!$("#dlg").hidden && e.key === "Escape") closeDlg(false);
+});
+
 // Lightbox: preview gambar ukuran besar (dipakai struk di form, borongan, daftar)
 function openLightbox({ src, fullUrl, onRemove }) {
   if (!src) return;
@@ -151,7 +197,7 @@ $("#txd-edit").addEventListener("click", () => {
 $("#txd-del").addEventListener("click", async () => {
   const id = detailTxId;
   if (!id) return;
-  if (!confirm("Hapus transaksi ini?")) return;
+  if (!(await confirmDlg("Hapus transaksi ini?"))) return;
   try {
     await api("/api/transactions/" + id, { method: "DELETE" });
     toast("Dihapus 🗑️");
@@ -189,7 +235,9 @@ function logout() {
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = e.target.querySelector("button");
+  const btnLabel = btn.textContent;
   btn.disabled = true;
+  btn.textContent = "Memproses…";
   try {
     const r = await fetch("/api/login", {
       method: "POST",
@@ -206,6 +254,7 @@ $("#login-form").addEventListener("submit", async (e) => {
   } catch (err) {
     toast(err.message, false);
   }
+  btn.textContent = btnLabel;
   btn.disabled = false;
 });
 $("#logout-btn").addEventListener("click", () => {
@@ -241,6 +290,9 @@ async function showApp() {
     state.inputters = inputters;
     renderInputterSelects();
   } catch (err) {
+    // Gagal ambil data awal (mis. token basi tapi belum 401) — kembali ke login
+    // supaya tidak tampil aplikasi kosong/rusak.
+    logout();
     toast(err.message, false);
     return;
   }
@@ -271,6 +323,8 @@ $("#dash-month").addEventListener("change", () => loadDashboard().catch((e) => t
 
 async function loadDashboard() {
   const month = $("#dash-month").value || todayStr().slice(0, 7);
+  $("#cat-list").innerHTML = '<div class="loading">Memuat…</div>';
+  $("#recent-list").innerHTML = '<div class="loading">Memuat…</div>';
   const [yy, mm] = month.split("-");
   $("#dash-subtitle").textContent = `Keuangan ${NAMA_BULAN[parseInt(mm, 10) - 1]} ${yy}`;
   const s = await api("/api/summary?month=" + encodeURIComponent(month));
@@ -279,7 +333,9 @@ async function loadDashboard() {
   countUp($("#stat-balance"), s.balance);
   $("#stat-balance").closest(".stat").classList.toggle("neg", s.balance < 0);
 
-  if (window.Chart) {
+  const chartCanvas = $("#chart-daily");
+  const chartWrap = chartCanvas?.closest(".chart-wrap");
+  if (window.Chart && chartCanvas) {
     if (state.chart) state.chart.destroy();
     const dark = document.documentElement.dataset.theme === "dark";
     const gridC = dark ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.06)";
@@ -314,6 +370,11 @@ async function loadDashboard() {
         },
       },
     });
+  } else if (chartWrap && !chartWrap.dataset.fallback) {
+    // CDN Chart.js gagal dimuat (mis. offline) — tampilkan pesan, bukan kanvas kosong.
+    chartWrap.dataset.fallback = "1";
+    chartWrap.innerHTML =
+      '<p class="muted" style="padding:24px;text-align:center">Grafik tidak tersedia — CDN Chart.js gagal dimuat.</p>';
   }
 
   const max = Math.max(1, ...s.byCategory.map((c) => c.total));
@@ -384,7 +445,7 @@ document.querySelectorAll(".inputter-select").forEach((sel) =>
 );
 document.querySelectorAll(".inputter-add").forEach((btn) =>
   btn.addEventListener("click", async () => {
-    const name = prompt("Nama penginput baru:");
+    const name = await promptDlg("Nama penginput baru:");
     if (!name || !name.trim()) return;
     try {
       const { name: saved } = await api("/api/inputters", {
@@ -407,7 +468,7 @@ document.querySelectorAll(".inputter-del").forEach((btn) =>
     const sel = btn.closest(".inputter-wrap").querySelector(".inputter-select");
     const name = sel.value;
     if (!name) return;
-    if (!confirm(`Hapus "${name}" dari daftar penginput?`)) return;
+    if (!(await confirmDlg(`Hapus "${name}" dari daftar penginput?`))) return;
     try {
       await api("/api/inputters/" + encodeURIComponent(name), { method: "DELETE" });
       state.inputters = state.inputters.filter((n) => n !== name);
@@ -421,6 +482,10 @@ document.querySelectorAll(".inputter-del").forEach((btn) =>
 );
 
 async function loadTx() {
+  const applyBtn = $("#f-apply");
+  applyBtn.disabled = true;
+  $("#tx-list").innerHTML = '<div class="loading">Memuat transaksi…</div>';
+  try {
   const p = new URLSearchParams({ limit: 200, offset: 0 });
   if ($("#f-from").value) p.set("from", $("#f-from").value);
   if ($("#f-to").value) p.set("to", $("#f-to").value);
@@ -473,6 +538,9 @@ async function loadTx() {
       showTxDetail(row.dataset.txId);
     })
   );
+  } finally {
+    applyBtn.disabled = false;
+  }
 }
 
 // ---------------- pilih massal + hapus massal ----------------
@@ -481,6 +549,7 @@ const selectedIds = new Set();
 function updateSelBar() {
   const n = selectedIds.size;
   $("#sel-count").textContent = `${n} dipilih`;
+  $("#tx-del-selected").disabled = n === 0;
   const boxes = document.querySelectorAll(".tx-check");
   const all = $("#tx-select-all");
   all.checked = boxes.length > 0 && n === boxes.length;
@@ -499,7 +568,7 @@ $("#tx-select-all").addEventListener("change", (e) => {
 $("#tx-del-selected").addEventListener("click", async () => {
   const n = selectedIds.size;
   if (!n) return;
-  if (!confirm(`Hapus ${n} transaksi yang dipilih?`)) return;
+  if (!(await confirmDlg(`Hapus ${n} transaksi yang dipilih?`))) return;
   try {
     const r = await api("/api/transactions", {
       method: "DELETE",
@@ -514,7 +583,7 @@ $("#tx-del-selected").addEventListener("click", async () => {
 });
 
 async function delTx(id) {
-  if (!confirm("Hapus transaksi ini?")) return;
+  if (!(await confirmDlg("Hapus transaksi ini?"))) return;
   try {
     await api("/api/transactions/" + id, { method: "DELETE" });
     toast("Transaksi dihapus");
@@ -604,6 +673,7 @@ function debtStatus(d) {
 
 async function loadDebts() {
   const status = $("#debt-filter-status").value;
+  $("#debt-list").innerHTML = '<div class="loading">Memuat…</div>';
   // Daftar tampil mengikuti filter, tapi statistik SELALU dari yang belum lunas
   // (biar ganti filter ke "Lunas" tidak mengnolkan angka).
   const [{ debts }, { debts: unpaid }] = await Promise.all([
@@ -665,7 +735,7 @@ async function toggleDebt(id) {
 }
 
 async function delDebt(id) {
-  if (!confirm("Hapus data hutang ini?")) return;
+  if (!(await confirmDlg("Hapus data hutang ini?"))) return;
   try {
     await api("/api/debts/" + id, { method: "DELETE" });
     toast("Dihapus 🗑️");
@@ -701,7 +771,9 @@ function startEditDebt(id) {
 $("#debt-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("#debt-submit");
+  const btnLabel = btn.textContent;
   btn.disabled = true;
+  btn.textContent = "Menyimpan…";
   try {
     const amount = parseInt(($("#debt-amount").value || "").replace(/\D/g, ""), 10);
     if (!amount || amount <= 0) throw new Error("Nominal harus lebih dari 0");
@@ -724,18 +796,19 @@ $("#debt-form").addEventListener("submit", async (e) => {
       });
       toast("Hutang diperbarui ✅");
     } else {
-      await api("/api/debts", {
+      const rDebt = await api("/api/debts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      toast("Tersimpan ✅ — notif dikirim ke Telegram");
+      toast(rDebt.telegram ? "Tersimpan ✅ — notif dikirim ke Telegram" : "Tersimpan ✅");
     }
     resetDebtForm();
     await loadDebts();
   } catch (err) {
     toast(err.message, false);
   }
+  btn.textContent = btnLabel;
   btn.disabled = false;
 });
 
@@ -844,10 +917,12 @@ $("#bulk-submit").addEventListener("click", async () => {
   }
   const input_by = $("#bulk-inputter").value || "";
   const btn = $("#bulk-submit");
+  const btnLabel = btn.textContent;
   btn.disabled = true;
   try {
     // 1. Upload foto tiap baris yang ada fotonya (paralel).
     //    One-shot: foto + caption notifikasi dikirim sekali jalan via Telegram.
+    btn.textContent = "Mengupload struk…";
     const uploaded = await Promise.all(
       items.map(async (it, i) => {
         if (!it.file) return { ...it, receipt_key: "", notified: false };
@@ -870,6 +945,7 @@ $("#bulk-submit").addEventListener("click", async () => {
       })
     );
     // 2. Simpan semua sekaligus (rekap teks hanya untuk baris tanpa foto)
+    btn.textContent = "Menyimpan…";
     const payload = uploaded.map(({ row, file, ...rest }) => rest);
     const r = await api("/api/transactions/batch", {
       method: "POST",
@@ -879,12 +955,17 @@ $("#bulk-submit").addEventListener("click", async () => {
     const nPhoto = uploaded.filter((x) => x.receipt_key).length;
     toast(
       `${r.count} transaksi tersimpan ✅` +
-        (nPhoto ? ` — ${nPhoto} struk terkirim ke Telegram` : " — rekap dikirim ke Telegram")
+        (r.telegram
+          ? nPhoto
+            ? ` — ${nPhoto} struk terkirim ke Telegram`
+            : " — rekap dikirim ke Telegram"
+          : "")
     );
     resetBulkRows();
   } catch (e) {
     toast(e.message, false);
   }
+  btn.textContent = btnLabel;
   btn.disabled = false;
 });
 
@@ -1015,7 +1096,9 @@ async function toUploadFile(file) {
 $("#tx-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("#tx-submit");
+  const btnLabel = btn.textContent;
   btn.disabled = true;
+  btn.textContent = "Menyimpan…";
   try {
     const amount = parseInt(($("#tx-amount").value || "").replace(/\D/g, ""), 10);
     if (!amount || amount <= 0) throw new Error("Nominal harus lebih dari 0");
@@ -1069,21 +1152,24 @@ $("#tx-form").addEventListener("submit", async (e) => {
       });
       toast("Transaksi diperbarui ✅");
     } else {
-      await api("/api/transactions", {
+      const rTx = await api("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       toast(
-        via === "telegram"
-          ? "Tersimpan ✅ — struk & notif terkirim via Telegram"
-          : "Tersimpan ✅ — notif dikirim ke Telegram"
+        !rTx.telegram
+          ? "Tersimpan ✅"
+          : via === "telegram"
+            ? "Tersimpan ✅ — struk & notif terkirim via Telegram"
+            : "Tersimpan ✅ — notif dikirim ke Telegram"
       );
     }
     resetForm();
   } catch (err) {
     toast(err.message, false);
   }
+  btn.textContent = btnLabel;
   btn.disabled = false;
 });
 
