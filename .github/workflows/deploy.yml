@@ -23,7 +23,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
 
     steps:
       - name: 🚚 Checkout repository
@@ -66,20 +66,12 @@ jobs:
 
           [ -n "$TELEGRAM_BOT_TOKEN" ] || echo "::warning:: TELEGRAM_BOT_TOKEN kosong — notif Telegram nonaktif."
           [ -n "$TELEGRAM_CHAT_ID" ] || echo "::warning:: TELEGRAM_CHAT_ID kosong — notif Telegram nonaktif."
-          [ -n "$R2_BUCKET_NAME" ] || echo "::warning:: R2_BUCKET_NAME kosong — upload foto struk nonaktif."
-
           CONFIG_FILE="wrangler-action.toml"
-
-          # R2 opsional: hapus bloknya kalau bucket tidak diisi
-          if [ -z "$R2_BUCKET_NAME" ]; then
-            sed -i '/\[\[r2_buckets\]\]/,/^$/d' "$CONFIG_FILE"
-          fi
 
           # Escape karakter spesial sed (| & \) pada nilai secret
           esc() { printf '%s' "$1" | sed -e 's/[|&\\]/\\&/g'; }
 
           sed -i "s|\${NAME}|$(esc "$NAME")|g" "$CONFIG_FILE"
-          sed -i "s|\${R2_BUCKET_NAME}|$(esc "$R2_BUCKET_NAME")|g" "$CONFIG_FILE"
           sed -i "s|\${JWT_SECRET}|$(esc "$JWT_SECRET")|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN_USERNAME}|$(esc "$ADMIN_USERNAME")|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN_PASSWORD}|$(esc "$ADMIN_PASSWORD")|g" "$CONFIG_FILE"
@@ -87,6 +79,44 @@ jobs:
           sed -i "s|\${TELEGRAM_CHAT_ID}|$(esc "$TELEGRAM_CHAT_ID")|g" "$CONFIG_FILE"
 
           echo "✅ Environment siap."
+
+      - name: ⚙️ Set up KV namespace
+        working-directory: ./worker
+        run: |
+          CONFIG_FILE="wrangler-action.toml"
+
+          if [ -n "$KV_NAMESPACE_ID" ]; then
+            sed -i "s|\${KV_NAMESPACE_ID}|$KV_NAMESPACE_ID|g" "$CONFIG_FILE"
+            echo "✅ Memakai KV dari secrets."
+            exit 0
+          fi
+
+          echo "🔍 Mengecek KV namespace..."
+
+          set +e
+            KV_LIST=$(pnpm wrangler kv namespace list 2>&1)
+            STATUS=$?
+          set -e
+
+          if [ $STATUS -ne 0 ]; then
+            echo "$KV_LIST"
+            exit 1
+          fi
+
+          KV_TITLE="$NAME-receipts"
+
+          if echo "$KV_LIST" | jq -e ".[] | select(.title == \"$KV_TITLE\")" >/dev/null; then
+            echo "✅ KV namespace $KV_TITLE sudah ada."
+            KV_ID=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"$KV_TITLE\") | .id")
+          else
+            echo "⚠️ KV namespace $KV_TITLE belum ada, membuat baru..."
+            pnpm wrangler kv namespace create "$KV_TITLE"
+            KV_LIST=$(pnpm wrangler kv namespace list)
+            KV_ID=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"$KV_TITLE\") | .id")
+          fi
+
+          sed -i "s|\${KV_NAMESPACE_ID}|$KV_ID|g" "$CONFIG_FILE"
+          echo "✅ KV siap: $KV_ID"
 
       - name: 🐬 Set up D1 database
         working-directory: ./worker
