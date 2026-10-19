@@ -156,8 +156,9 @@ $("#txd-del").addEventListener("click", async () => {
     await api("/api/transactions/" + id, { method: "DELETE" });
     toast("Dihapus 🗑️");
     closeTxDetail();
-    if (currentTab === "dashboard") loadDashboard().catch(() => {});
-    else loadTx().catch(() => {});
+    const activeTab = document.querySelector(".nav-btn.active")?.dataset.tab;
+    if (activeTab === "transaksi") loadTx().catch(() => {});
+    else loadDashboard().catch(() => {});
   } catch (e) {
     toast(e.message, false);
   }
