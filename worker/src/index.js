@@ -3,7 +3,7 @@
 
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
-import { notifyTransaction } from "./telegram.js";
+import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId } from "./telegram.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -53,39 +53,124 @@ export default {
         return json({ categories: results || [] });
       }
 
-      // ---------- upload struk ke R2 ----------
+      // ---------- upload struk ----------
+      // Jalur utama: TELEGRAM (gratis, praktis unlimited, tanpa kartu kredit).
+      // Foto dikirim via sendPhoto ke chat Telegram; kalau meta transaksi
+      // disertakan, caption notifikasi ikut dikirim SEKALI JALAN (tidak dobel
+      // saat transaksi dibuat). file_id yang dikembalikan Telegram disimpan
+      // sebagai receipt_key format "tg:<file_id>".
+      // Fallback: KV ("kv:receipts/...") bila Telegram tak dikonfigurasi/gagal.
       if (path === "/api/upload" && request.method === "POST") {
         if (!(await getAuthUser(request, env))) return unauthorized();
-        if (!env.BUCKET) return json({ error: "R2 belum dikonfigurasi" }, 500);
         const form = await request.formData().catch(() => null);
         const file = form ? form.get("file") : null;
         if (!file || typeof file === "string") return json({ error: "File tidak ditemukan" }, 400);
         if (file.size > 5 * 1024 * 1024) return json({ error: "Ukuran file maksimal 5MB" }, 400);
+
+        const meta = {
+          date: String(form.get("date") || "").slice(0, 10),
+          type: form.get("type") === "in" ? "in" : "out",
+          category: String(form.get("category") || "").slice(0, 80),
+          amount: Math.floor(Number(form.get("amount")) || 0),
+          note: String(form.get("note") || "").slice(0, 500),
+        };
+        const hasMeta = meta.amount > 0 && DATE_RE.test(meta.date);
+
+        // --- Jalur 1: Telegram ---
+        if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+          try {
+            const bytes = await file.arrayBuffer();
+            const tgForm = new FormData();
+            tgForm.append("chat_id", env.TELEGRAM_CHAT_ID);
+            tgForm.append("caption", hasMeta ? txMessage(meta) : "🧾 Struk");
+            tgForm.append("parse_mode", "HTML");
+            tgForm.append("photo", new Blob([bytes], { type: "image/webp" }), "struk.webp");
+            const tgRes = await fetch(
+              `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`,
+              { method: "POST", body: tgForm }
+            );
+            const tgData = await tgRes.json().catch(() => ({}));
+            const photos = tgData?.result?.photo;
+            const fileId =
+              Array.isArray(photos) && photos.length ? photos[photos.length - 1].file_id : null;
+            if (tgRes.ok && fileId) {
+              const key = `tg:${fileId}`;
+              return json({ key, url: `/api/receipt/${key}`, via: "telegram", notified: hasMeta });
+            }
+            console.log("telegram upload gagal, fallback KV:", JSON.stringify(tgData).slice(0, 200));
+          } catch (e) {
+            console.log("telegram upload error, fallback KV:", e?.message || e);
+          }
+        }
+
+        // --- Jalur 2: KV (fallback) ---
+        if (!env.RECEIPTS) {
+          return json({ error: "Telegram & KV belum dikonfigurasi — struk tidak bisa disimpan" }, 500);
+        }
         const ext =
-          (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) ||
-          "jpg";
-        const key = `receipts/${crypto.randomUUID()}.${ext}`;
-        await env.BUCKET.put(key, file.stream(), {
-          httpMetadata: { contentType: file.type || "image/jpeg" },
+          (file.name.split(".").pop() || "webp").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) ||
+          "webp";
+        const key = `kv:receipts/${crypto.randomUUID()}.${ext}`;
+        await env.RECEIPTS.put(key, await file.arrayBuffer(), {
+          metadata: { contentType: file.type || "image/webp" },
         });
-        return json({ key, url: `/api/receipt/${key}` });
+        return json({ key, url: `/api/receipt/${key}`, via: "kv", notified: false });
       }
 
-      // ---------- serve struk (URL tak-tertebak, tanpa login agar <img> bisa tampil) ----------
+      // ---------- serve struk ----------
+      // Format key: "tg:<file_id>" (Telegram), "kv:..." (KV), atau
+      // "receipts/..." polos (KV, format lama). Tanpa login agar <img> bisa
+      // tampil — key-nya tak-tertebak (file_id Telegram / uuid).
       if (path.startsWith("/api/receipt/") && request.method === "GET") {
-        if (!env.BUCKET) return json({ error: "R2 belum dikonfigurasi" }, 500);
         const key = path.slice("/api/receipt/".length);
-        if (!/^receipts\/[A-Za-z0-9-]+\.[a-z0-9]{1,5}$/.test(key)) {
-          return json({ error: "not found" }, 404);
+
+        // --- Telegram storage: getFile lalu proxy download (token tetap di server) ---
+        const mTg = key.match(/^tg:([A-Za-z0-9_-]{10,200})$/);
+        if (mTg) {
+          if (!env.TELEGRAM_BOT_TOKEN) return json({ error: "Telegram belum dikonfigurasi" }, 500);
+          try {
+            const gfRes = await fetch(
+              `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(mTg[1])}`
+            );
+            const gfData = await gfRes.json().catch(() => ({}));
+            const filePath = gfData?.result?.file_path;
+            if (!gfRes.ok || !filePath) return json({ error: "not found" }, 404);
+            const dlRes = await fetch(
+              `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`
+            );
+            if (!dlRes.ok || !dlRes.body) return json({ error: "not found" }, 404);
+            const ct = /\.png$/i.test(filePath)
+              ? "image/png"
+              : /\.webp$/i.test(filePath)
+                ? "image/webp"
+                : "image/jpeg";
+            return new Response(dlRes.body, {
+              headers: { "Content-Type": ct, "Cache-Control": "public, max-age=86400" },
+            });
+          } catch {
+            return json({ error: "not found" }, 404);
+          }
         }
-        const obj = await env.BUCKET.get(key);
-        if (!obj) return json({ error: "not found" }, 404);
-        return new Response(obj.body, {
-          headers: {
-            "Content-Type": obj.httpMetadata?.contentType || "image/jpeg",
-            "Cache-Control": "public, max-age=31536000",
-          },
-        });
+
+        // --- KV storage ---
+        const mKv = key.match(
+          /^(kv:receipts\/[A-Za-z0-9-]+\.[a-z0-9]{1,5}|receipts\/[A-Za-z0-9-]+\.[a-z0-9]{1,5})$/
+        );
+        if (mKv) {
+          if (!env.RECEIPTS) return json({ error: "KV belum dikonfigurasi" }, 500);
+          const { value, metadata } = await env.RECEIPTS.getWithMetadata(mKv[1], {
+            type: "arrayBuffer",
+          });
+          if (!value) return json({ error: "not found" }, 404);
+          return new Response(value, {
+            headers: {
+              "Content-Type": metadata?.contentType || "image/webp",
+              "Cache-Control": "public, max-age=31536000",
+            },
+          });
+        }
+
+        return json({ error: "not found" }, 404);
       }
 
       // ---------- koleksi transaksi ----------
@@ -136,19 +221,63 @@ export default {
             "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
           ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.created_at).run();
 
-          // Notif Telegram (async, fire-and-forget — gagal notif tidak menggagalkan simpan)
-          let photoBytes = null;
-          if (tx.receipt_key && env.BUCKET) {
-            try {
-              const obj = await env.BUCKET.get(tx.receipt_key);
-              if (obj) photoBytes = await obj.arrayBuffer();
-            } catch { /* abaikan */ }
+          // Notif Telegram — dilewati bila upload tadi sudah mengirim foto+caption
+          // notifikasi sekali jalan (receipt via Telegram selalu begitu).
+          // Fire-and-forget: gagal notif tidak menggagalkan simpan.
+          if (b.notified !== true) {
+            const mTgKey = tx.receipt_key.match(/^tg:([A-Za-z0-9_-]{10,200})$/);
+            if (mTgKey) {
+              // Foto sudah ada di Telegram: kirim ulang via file_id + caption
+              sendPhotoByFileId(env, mTgKey[1], txMessage(tx)).catch(() => {});
+            } else {
+              let photoBytes = null;
+              if (tx.receipt_key && env.RECEIPTS) {
+                try {
+                  photoBytes = await env.RECEIPTS.get(tx.receipt_key, { type: "arrayBuffer" });
+                } catch { /* abaikan */ }
+              }
+              notifyTransaction(env, tx, photoBytes).catch(() => {});
+            }
           }
-          notifyTransaction(env, tx, photoBytes).catch(() => {});
           return json({ transaction: tx }, 201);
         }
 
         return json({ error: "method not allowed" }, 405);
+      }
+
+      // ---------- tambah borongan: banyak transaksi sekaligus ----------
+      // 1 request, 1x insert batch, 1 pesan rekap Telegram (tidak spam).
+      if (path === "/api/transactions/batch" && request.method === "POST") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        const b = await request.json().catch(() => ({}));
+        const items = Array.isArray(b.items) ? b.items : [];
+        if (!items.length) return json({ error: "Tidak ada data" }, 400);
+        if (items.length > 50) return json({ error: "Maksimal 50 transaksi sekaligus" }, 400);
+        const txs = [];
+        for (const it of items) {
+          const date = String(it.date || "").slice(0, 10);
+          const type = it.type === "in" ? "in" : "out";
+          const category = String(it.category || "Lainnya").slice(0, 80) || "Lainnya";
+          const amount = Math.floor(Number(it.amount) || 0);
+          const note = String(it.note || "").slice(0, 500);
+          if (!DATE_RE.test(date) || amount <= 0) {
+            return json({ error: "Ada baris yang tanggal / nominalnya tidak valid" }, 400);
+          }
+          txs.push({
+            id: crypto.randomUUID(),
+            date, type, category, amount, note,
+            receipt_key: "",
+            created_at: new Date().toISOString(),
+          });
+        }
+        const stmt = env.DB.prepare(
+          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        await env.DB.batch(
+          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.created_at))
+        );
+        notifyBatch(env, txs).catch(() => {});
+        return json({ count: txs.length, transactions: txs }, 201);
       }
 
       // ---------- satu transaksi: ubah / hapus ----------
@@ -185,8 +314,8 @@ export default {
           const row = await env.DB.prepare("SELECT receipt_key FROM transactions WHERE id = ?")
             .bind(id).first();
           await env.DB.prepare("DELETE FROM transactions WHERE id = ?").bind(id).run();
-          if (row?.receipt_key && env.BUCKET) {
-            try { await env.BUCKET.delete(row.receipt_key); } catch { /* abaikan */ }
+          if (row?.receipt_key && env.RECEIPTS) {
+            try { await env.RECEIPTS.delete(row.receipt_key); } catch { /* abaikan */ }
           }
           return json({ ok: true });
         }

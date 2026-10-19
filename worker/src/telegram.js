@@ -42,6 +42,42 @@ async function tgSend(env, method, body, isForm) {
   return { ok: res.ok };
 }
 
+// Rekap banyak transaksi dalam 1 pesan (mode borongan) — anti spam.
+export function batchMessage(txs) {
+  const lines = [`🧾 <b>${txs.length} TRANSAKSI BARU (BORONGAN)</b>`, ""];
+  let totalIn = 0,
+    totalOut = 0;
+  for (const tx of txs) {
+    const emoji = tx.type === "in" ? "💰" : "💸";
+    const sign = tx.type === "in" ? "+" : "-";
+    if (tx.type === "in") totalIn += tx.amount;
+    else totalOut += tx.amount;
+    lines.push(
+      `${emoji} ${sign}${formatIDR(tx.amount)} — ${escapeHtml(tx.category)}${tx.note ? ` <i>(${escapeHtml(tx.note)})</i>` : ""}`
+    );
+  }
+  lines.push("", `Masuk: <b>${formatIDR(totalIn)}</b> • Keluar: <b>${formatIDR(totalOut)}</b>`);
+  return lines.join("\n");
+}
+
+export async function notifyBatch(env, txs) {
+  try {
+    await tgSend(env, "sendMessage", { text: batchMessage(txs), parse_mode: "HTML" });
+  } catch (e) {
+    console.log("notifyBatch failed:", e?.message || e);
+  }
+}
+
+// Kirim foto yang sudah ada di Telegram via file_id (tanpa upload ulang).
+// Dipakai untuk notifikasi ulang / fallback saat bytes asli tak tersedia.
+export async function sendPhotoByFileId(env, fileId, caption) {
+  try {
+    await tgSend(env, "sendPhoto", { photo: fileId, caption, parse_mode: "HTML" });
+  } catch (e) {
+    console.log("sendPhotoByFileId failed:", e?.message || e);
+  }
+}
+
 // Kirim notif transaksi. photoBytes = ArrayBuffer struk (opsional).
 // Tidak pernah melempar error — kegagalan notif tidak menggagalkan pencatatan.
 export async function notifyTransaction(env, tx, photoBytes) {
@@ -52,7 +88,7 @@ export async function notifyTransaction(env, tx, photoBytes) {
       form.append("chat_id", env.TELEGRAM_CHAT_ID);
       form.append("caption", caption);
       form.append("parse_mode", "HTML");
-      form.append("photo", new Blob([photoBytes], { type: "image/jpeg" }), "struk.jpg");
+      form.append("photo", new Blob([photoBytes], { type: "image/webp" }), "struk.webp");
       await tgSend(env, "sendPhoto", form, true);
     } else {
       await tgSend(env, "sendMessage", { text: caption, parse_mode: "HTML" });

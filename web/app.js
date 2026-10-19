@@ -25,6 +25,38 @@ const fmtDate = (s) => {
 const escHtml = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// Ikon per kategori biar tampilannya hidup
+const CAT_ICONS = {
+  "Gaji": "💼", "Bonus": "🎁", "Usaha / Freelance": "🧑‍💻", "Hadiah": "🎀", "Lainnya (Masuk)": "📥",
+  "Makan & Minum": "🍜", "Transport / Bensin": "⛽", "Belanja": "🛍️", "Tagihan & Listrik": "💡",
+  "Pulsa & Kuota": "📱", "Kesehatan": "🏥", "Hiburan & Game": "🎮", "Tabungan": "🏦", "Lainnya (Keluar)": "📤",
+};
+const catIcon = (name, type) => CAT_ICONS[name] || (type === "in" ? "💰" : "💸");
+
+// Animasi angka naik di kartu statistik
+function countUp(el, target) {
+  const dur = 700;
+  const start = performance.now();
+  const neg = target < 0;
+  const abs = Math.abs(target);
+  function frame(t) {
+    const p = Math.min(1, (t - start) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = (neg ? "-" : "") + fmtIDR(Math.round(abs * eased));
+    if (p < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// Tema gelap / terang
+function updateThemeBtn() {
+  $("#theme-btn").textContent = document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
+}
+function initTheme() {
+  document.documentElement.dataset.theme = localStorage.getItem("uang_theme") || "light";
+  updateThemeBtn();
+}
+
 let toastTimer;
 function toast(msg, ok = true) {
   const t = $("#toast");
@@ -82,6 +114,13 @@ $("#logout-btn").addEventListener("click", () => {
   logout();
   toast("Kamu sudah keluar");
 });
+$("#theme-btn").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("uang_theme", next);
+  updateThemeBtn();
+  if (!$("#tab-dashboard").hidden) loadDashboard().catch(() => {});
+});
 
 async function showApp() {
   $("#login-view").hidden = true;
@@ -119,34 +158,43 @@ $("#dash-month").addEventListener("change", () => loadDashboard().catch((e) => t
 
 async function loadDashboard() {
   const month = $("#dash-month").value || todayStr().slice(0, 7);
+  const [yy, mm] = month.split("-");
+  $("#dash-subtitle").textContent = `Keuangan ${NAMA_BULAN[parseInt(mm, 10) - 1]} ${yy}`;
   const s = await api("/api/summary?month=" + encodeURIComponent(month));
-  $("#stat-in").textContent = fmtIDR(s.totalIn);
-  $("#stat-out").textContent = fmtIDR(s.totalOut);
-  const balEl = $("#stat-balance");
-  balEl.textContent = (s.balance < 0 ? "-" : "") + fmtIDR(Math.abs(s.balance));
-  balEl.closest(".stat").classList.toggle("neg", s.balance < 0);
+  countUp($("#stat-in"), s.totalIn);
+  countUp($("#stat-out"), s.totalOut);
+  countUp($("#stat-balance"), s.balance);
+  $("#stat-balance").closest(".stat").classList.toggle("neg", s.balance < 0);
 
   if (window.Chart) {
     if (state.chart) state.chart.destroy();
+    const dark = document.documentElement.dataset.theme === "dark";
+    const gridC = dark ? "rgba(255,255,255,.07)" : "rgba(15,23,42,.06)";
+    const tickC = dark ? "#8b94a9" : "#64748b";
     state.chart = new Chart($("#chart-daily"), {
       type: "bar",
       data: {
         labels: s.daily.map((d) => parseInt(d.date.slice(8), 10)),
         datasets: [
-          { label: "Masuk", data: s.daily.map((d) => d.in), backgroundColor: "#16a34a" },
-          { label: "Keluar", data: s.daily.map((d) => d.out), backgroundColor: "#e11d48" },
+          { label: "Masuk", data: s.daily.map((d) => d.in), backgroundColor: "#10b981", borderRadius: 5, barPercentage: 0.75, categoryPercentage: 0.62 },
+          { label: "Keluar", data: s.daily.map((d) => d.out), backgroundColor: "#f43f5e", borderRadius: 5, barPercentage: 0.75, categoryPercentage: 0.62 },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: "bottom" },
+          legend: { position: "bottom", labels: { color: tickC, usePointStyle: true, pointStyle: "circle" } },
           tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${fmtIDR(c.parsed.y)}` } },
         },
         scales: {
+          x: { grid: { display: false }, ticks: { color: tickC, maxTicksLimit: 16 } },
           y: {
+            grid: { color: gridC },
+            border: { display: false },
             ticks: {
+              color: tickC,
+              maxTicksLimit: 6,
               callback: (v) => (v >= 1e6 ? v / 1e6 + "jt" : v >= 1e3 ? v / 1e3 + "rb" : v),
             },
           },
@@ -161,8 +209,11 @@ async function loadDashboard() {
         .map(
           (c) => `
       <div class="cat-row">
-        <div class="cat-head"><span>${c.type === "in" ? "💰" : "💸"} ${escHtml(c.category)}</span><span>${fmtIDR(c.total)}</span></div>
-        <div class="bar"><i style="width:${Math.round((c.total / max) * 100)}%;background:${c.type === "in" ? "#16a34a" : "#e11d48"}"></i></div>
+        <div class="cat-head">
+          <span class="cat-name"><i class="cat-ico ${c.type}">${catIcon(c.category, c.type)}</i>${escHtml(c.category)} <em class="muted">×${c.n}</em></span>
+          <span class="cat-total">${fmtIDR(c.total)}</span>
+        </div>
+        <div class="bar"><i style="width:${Math.round((c.total / max) * 100)}%;background:${c.type === "in" ? "#10b981" : "#f43f5e"}"></i></div>
       </div>`
         )
         .join("")
@@ -177,7 +228,7 @@ async function loadDashboard() {
 function txRow(t) {
   return `
   <div class="tx-row ${t.type}">
-    <div class="tx-ico">${t.type === "in" ? "💰" : "💸"}</div>
+    <div class="tx-ico">${catIcon(t.category, t.type)}</div>
     <div class="tx-main"><b>${escHtml(t.category)}</b>
       <span class="muted">${fmtDate(t.date)}${t.note ? " • " + escHtml(t.note) : ""}</span>
     </div>
@@ -207,7 +258,7 @@ async function loadTx() {
         .map(
           (t) => `
     <div class="tx-row ${t.type}">
-      <div class="tx-ico">${t.type === "in" ? "💰" : "💸"}</div>
+      <div class="tx-ico">${catIcon(t.category, t.type)}</div>
       <div class="tx-main"><b>${escHtml(t.category)}</b>
         <span class="muted">${fmtDate(t.date)}${t.note ? " • " + escHtml(t.note) : ""}${
             t.receipt_key ? ` • <a href="/api/receipt/${t.receipt_key}" target="_blank">🧾 struk</a>` : ""
@@ -247,6 +298,93 @@ $("#f-export").addEventListener("click", () => {
   a.download = "transaksi.csv";
   a.click();
   toast("CSV diunduh");
+});
+
+// ---------------- mode borongan ----------------
+// Banyak transaksi sekaligus → 1 request, 1 pesan rekap Telegram (tidak spam).
+let bulkCount = 0;
+
+function setEntryMode(mode) {
+  const bulk = mode === "bulk";
+  $("#mode-single").classList.toggle("active", !bulk);
+  $("#mode-bulk").classList.toggle("active", bulk);
+  $("#tx-form").hidden = bulk;
+  $("#bulk-wrap").hidden = !bulk;
+  if (bulk && bulkCount === 0) for (let i = 0; i < 3; i++) addBulkRow();
+}
+
+function addBulkRow() {
+  bulkCount++;
+  const div = document.createElement("div");
+  div.className = "bulk-row";
+  div.innerHTML = `
+    <input type="date" class="b-date" value="${todayStr()}" />
+    <select class="b-type"><option value="out">💸 Keluar</option><option value="in">💰 Masuk</option></select>
+    <select class="b-cat"></select>
+    <input class="b-amount" inputmode="numeric" placeholder="Nominal Rp" />
+    <input class="b-note" placeholder="Catatan (opsional)" />
+    <button type="button" class="btn sm danger b-del" title="Hapus baris">✕</button>`;
+  const typeSel = div.querySelector(".b-type");
+  const catSel = div.querySelector(".b-cat");
+  const fillCats = () => {
+    catSel.innerHTML = state.categories
+      .filter((c) => c.type === typeSel.value)
+      .map((c) => `<option>${escHtml(c.name)}</option>`)
+      .join("");
+  };
+  typeSel.addEventListener("change", fillCats);
+  fillCats();
+  div.querySelector(".b-amount").addEventListener("input", (e) => {
+    const d = e.target.value.replace(/\D/g, "").slice(0, 15);
+    e.target.value = d ? Number(d).toLocaleString("id-ID") : "";
+  });
+  div.querySelector(".b-del").addEventListener("click", () => {
+    div.remove();
+    bulkCount--;
+  });
+  $("#bulk-rows").appendChild(div);
+}
+
+function resetBulkRows() {
+  $("#bulk-rows").innerHTML = "";
+  bulkCount = 0;
+  for (let i = 0; i < 3; i++) addBulkRow();
+}
+
+$("#mode-single").addEventListener("click", () => setEntryMode("single"));
+$("#mode-bulk").addEventListener("click", () => setEntryMode("bulk"));
+$("#bulk-add").addEventListener("click", addBulkRow);
+$("#bulk-submit").addEventListener("click", async () => {
+  const items = [];
+  for (const row of document.querySelectorAll("#bulk-rows .bulk-row")) {
+    const amount = parseInt((row.querySelector(".b-amount").value || "").replace(/\D/g, ""), 10);
+    if (!amount) continue; // baris kosong dilewati otomatis
+    items.push({
+      date: row.querySelector(".b-date").value,
+      type: row.querySelector(".b-type").value,
+      category: row.querySelector(".b-cat").value,
+      amount,
+      note: row.querySelector(".b-note").value.trim(),
+    });
+  }
+  if (!items.length) {
+    toast("Isi dulu minimal 1 baris", false);
+    return;
+  }
+  const btn = $("#bulk-submit");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/transactions/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    toast(`${r.count} transaksi tersimpan ✅ — rekap dikirim ke Telegram`);
+    resetBulkRows();
+  } catch (e) {
+    toast(e.message, false);
+  }
+  btn.disabled = false;
 });
 
 // ---------------- form tambah / ubah ----------------
@@ -294,6 +432,33 @@ function startEdit(id) {
   window.scrollTo(0, 0);
 }
 
+// Kompres gambar ke WebP biar hemat storage KV.
+// HP zaman now foto struk bisa 3-5MB; sesudah kompres (maks 1280px, q75)
+// rata-rata cuma 50-150KB. 1GB KV = 10.000+ struk. Gagal → file asli.
+async function compressToWebp(file, maxDim = 1280, quality = 0.75) {
+  try {
+    if (!("createImageBitmap" in window)) return file;
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: "fromImage" });
+    } catch {
+      bitmap = await createImageBitmap(file);
+    }
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/webp", quality));
+    return blob || file;
+  } catch {
+    return file;
+  }
+}
+
 $("#tx-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("#tx-submit");
@@ -301,11 +466,29 @@ $("#tx-form").addEventListener("submit", async (e) => {
   try {
     const amount = parseInt(($("#tx-amount").value || "").replace(/\D/g, ""), 10);
     if (!amount || amount <= 0) throw new Error("Nominal harus lebih dari 0");
+    const txData = {
+      date: $("#tx-date").value,
+      type: state.formType,
+      category: $("#tx-category").value,
+      amount,
+      note: $("#tx-note").value.trim(),
+    };
     let receipt_key = "";
+    let notified = false;
+    let via = "";
     const file = $("#tx-file").files[0];
     if (file) {
+      // Kompres ke WebP dulu — hemat storage
+      const webp = await compressToWebp(file);
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", new File([webp], "struk.webp", { type: "image/webp" }));
+      // Meta transaksi ikut dikirim: kalau upload via Telegram, foto + caption
+      // notifikasi langsung dikirim sekali jalan (tidak dobel saat transaksi dibuat)
+      fd.append("date", txData.date);
+      fd.append("type", txData.type);
+      fd.append("category", txData.category);
+      fd.append("amount", String(txData.amount));
+      fd.append("note", txData.note);
       const up = await fetch("/api/upload", {
         method: "POST",
         headers: { Authorization: "Bearer " + state.token },
@@ -314,15 +497,10 @@ $("#tx-form").addEventListener("submit", async (e) => {
       const ud = await up.json().catch(() => ({}));
       if (!up.ok) throw new Error(ud.error || "Upload struk gagal");
       receipt_key = ud.key;
+      notified = ud.notified === true;
+      via = ud.via || "";
     }
-    const body = {
-      date: $("#tx-date").value,
-      type: state.formType,
-      category: $("#tx-category").value,
-      amount,
-      note: $("#tx-note").value.trim(),
-      ...(receipt_key ? { receipt_key } : {}),
-    };
+    const body = { ...txData, ...(receipt_key ? { receipt_key, notified } : {}) };
     if (state.editingId) {
       await api("/api/transactions/" + state.editingId, {
         method: "PUT",
@@ -336,7 +514,11 @@ $("#tx-form").addEventListener("submit", async (e) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      toast("Tersimpan ✅ — notif dikirim ke Telegram");
+      toast(
+        via === "telegram"
+          ? "Tersimpan ✅ — struk & notif terkirim via Telegram"
+          : "Tersimpan ✅ — notif dikirim ke Telegram"
+      );
     }
     resetForm();
   } catch (err) {
@@ -346,4 +528,5 @@ $("#tx-form").addEventListener("submit", async (e) => {
 });
 
 // ---------------- init ----------------
+initTheme();
 if (state.token) showApp().catch(() => logout());

@@ -14,9 +14,9 @@ binding = "DB"
 database_name = "${NAME}"
 database_id = "${D1_DATABASE_ID}"
 
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "${R2_BUCKET_NAME}"
+[[kv_namespaces]]
+binding = "RECEIPTS"
+id = "${KV_NAMESPACE_ID}"
 
 [vars]
 JWT_SECRET = "${JWT_SECRET}"
