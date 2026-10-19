@@ -45,7 +45,7 @@ Buka repo → **Settings → Secrets and variables → Actions → New repositor
 | `TELEGRAM_BOT_TOKEN` | ⚪ | Token bot Telegram — kosongkan = notif mati |
 | `TELEGRAM_CHAT_ID` | ⚪ | Chat ID tujuan notif — kosongkan = notif mati |
 | `D1_DATABASE_ID` | ⚪ | ID database D1 — kosongkan = dibuat otomatis |
-| `KV_NAMESPACE_ID` | ⚪ | ID KV namespace untuk foto struk — kosongkan = dibuat otomatis |
+| `KV_NAMESPACE_ID` | ⚪ | ID KV namespace untuk fallback struk — kosongkan = dibuat otomatis; kalau auto-create bermasalah, isi manual dari dashboard Cloudflare (Workers & Pages → KV) |
 | `NAME` | ⚪ | Nama worker & database (default: `uang-tracker`) |
 
 > Semua konfigurasi **hanya** dari Secrets — tidak ada secret yang di-hardcode di repo.
