@@ -79,7 +79,6 @@ jobs:
           esc() { printf '%s' "$1" | sed -e 's/[|&\\]/\\&/g'; }
 
           sed -i "s|\${NAME}|$(esc "$NAME")|g" "$CONFIG_FILE"
-          sed -i "s|\${D1_DATABASE_ID}|$(esc "$D1_DATABASE_ID")|g" "$CONFIG_FILE"
           sed -i "s|\${R2_BUCKET_NAME}|$(esc "$R2_BUCKET_NAME")|g" "$CONFIG_FILE"
           sed -i "s|\${JWT_SECRET}|$(esc "$JWT_SECRET")|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN_USERNAME}|$(esc "$ADMIN_USERNAME")|g" "$CONFIG_FILE"
@@ -95,6 +94,7 @@ jobs:
           CONFIG_FILE="wrangler-action.toml"
 
           if [ -n "$D1_DATABASE_ID" ]; then
+            sed -i "s|\${D1_DATABASE_ID}|$D1_DATABASE_ID|g" "$CONFIG_FILE"
             echo "✅ Memakai D1 dari secrets."
             exit 0
           fi
