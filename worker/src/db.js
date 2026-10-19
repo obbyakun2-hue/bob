@@ -37,10 +37,18 @@ const DEFAULT_CATEGORIES = [
 ];
 
 export async function initDb(db) {
+  if (!db || typeof db.exec !== "function") {
+    throw new Error("D1 binding (DB) tidak tersedia — cek database_id di konfigurasi worker");
+  }
   await db.exec(SCHEMA);
   const row = await db.prepare("SELECT COUNT(*) AS c FROM categories").first();
   if (!row || row.c === 0) {
-    const stmt = db.prepare("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)");
-    await db.batch(DEFAULT_CATEGORIES.map(([name, type]) => stmt.bind(name, type)));
+    // Satu statement multi-VALUES (tanpa batch) — pola paling aman di semua runtime.
+    const placeholders = DEFAULT_CATEGORIES.map(() => "(?, ?)").join(", ");
+    const params = DEFAULT_CATEGORIES.flat();
+    await db
+      .prepare(`INSERT OR IGNORE INTO categories (name, type) VALUES ${placeholders}`)
+      .bind(...params)
+      .run();
   }
 }

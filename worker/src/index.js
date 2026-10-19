@@ -25,7 +25,13 @@ export default {
         if (!env.JWT_SECRET || secret !== env.JWT_SECRET) {
           return json({ error: "forbidden" }, 403);
         }
-        await initDb(env.DB);
+        try {
+          await initDb(env.DB);
+        } catch (e) {
+          // Pesan asli dikembalikan agar debug gampang. Endpoint ini
+          // diproteksi JWT_SECRET jadi aman dari publik.
+          return json({ error: "init gagal: " + (e?.message || String(e)) }, 500);
+        }
         return new Response("success", { headers: { "Content-Type": "text/plain" } });
       }
 
