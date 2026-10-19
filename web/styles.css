@@ -327,6 +327,19 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .lightbox-box img { width: 100%; max-height: 68vh; object-fit: contain; border-radius: 12px; background: #0b0f1a; display: block; }
 .lightbox-actions { margin-top: 12px; justify-content: center; }
 
+/* ---------- detail transaksi ---------- */
+.tx-row.tappable { cursor: pointer; }
+.txd-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.txd-head .tx-ico { width: 52px; height: 52px; font-size: 1.5em; flex-shrink: 0; }
+.txd-head .tx-main { display: flex; flex-direction: column; }
+.txd-head .tx-amt { margin-left: auto; font-size: 1.3em; }
+.txd-head.in .tx-amt { color: var(--green-deep); }
+[data-theme="dark"] .txd-head.in .tx-amt { color: var(--green); }
+.txd-head.out .tx-amt { color: var(--red); }
+.txd-rows { display: flex; flex-direction: column; gap: 9px; }
+.txd-rows > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.txd-rows b { text-align: right; font-weight: 600; max-width: 65%; }
+
 /* ---------- hutang ---------- */
 .debt-badge { display: inline-block; font-size: 0.78em; font-weight: 700; padding: 2px 10px; border-radius: 20px; margin-top: 5px; width: fit-content; }
 .debt-badge.belum { background: rgba(245, 158, 11, 0.15); color: #d97706; }

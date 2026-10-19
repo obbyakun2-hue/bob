@@ -14,6 +14,7 @@ const state = {
   editingDebtId: null,
   debts: [],
   removeReceipt: false,
+  recentTx: [],
 };
 
 const fmtIDR = (n) => "Rp" + Number(n || 0).toLocaleString("id-ID");
@@ -94,12 +95,72 @@ function openLightbox({ src, fullUrl, onRemove }) {
 function closeLightbox() {
   $("#lightbox").hidden = true;
   $("#lightbox-img").src = "";
-  document.body.style.overflow = "";
+  document.body.style.overflow = $("#tx-detail").hidden ? "" : "hidden";
 }
 $("#lightbox-close").addEventListener("click", closeLightbox);
 $("#lightbox-backdrop").addEventListener("click", closeLightbox);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#lightbox").hidden) closeLightbox();
+  if (e.key !== "Escape") return;
+  if (!$("#lightbox").hidden) closeLightbox();
+  else if (!$("#tx-detail").hidden) closeTxDetail();
+});
+
+// Detail transaksi — tap baris di "Transaksi Terakhir" / daftar transaksi
+let detailTxId = null;
+function findTx(id) {
+  return (state.recentTx || []).concat(state.lastTx || []).find((x) => x.id === id);
+}
+function showTxDetail(id) {
+  const t = findTx(id);
+  if (!t) return;
+  detailTxId = id;
+  $("#txd-head").className = "txd-head " + t.type;
+  $("#txd-ico").textContent = catIcon(t.category, t.type);
+  $("#txd-cat").textContent = t.category;
+  $("#txd-date").textContent = fmtDate(t.date);
+  $("#txd-amt").textContent = (t.type === "in" ? "+" : "-") + fmtIDR(t.amount);
+  $("#txd-type").textContent = t.type === "in" ? "💰 Pemasukan" : "💸 Pengeluaran";
+  $("#txd-by").textContent = t.input_by || "—";
+  $("#txd-note").textContent = t.note || "—";
+  const rrow = $("#txd-receipt-row");
+  if (t.receipt_key) {
+    rrow.style.display = "";
+    const img = $("#txd-receipt");
+    img.style.display = "";
+    img.src = "/api/receipt/" + t.receipt_key;
+    img.onerror = () => (img.style.display = "none");
+    img.onclick = () => openLightbox({ src: img.src, fullUrl: img.src });
+  } else {
+    rrow.style.display = "none";
+  }
+  $("#tx-detail").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function closeTxDetail() {
+  $("#tx-detail").hidden = true;
+  detailTxId = null;
+  document.body.style.overflow = "";
+}
+$("#txd-close").addEventListener("click", closeTxDetail);
+$("#tx-detail-backdrop").addEventListener("click", closeTxDetail);
+$("#txd-edit").addEventListener("click", () => {
+  const id = detailTxId;
+  closeTxDetail();
+  if (id) startEdit(id);
+});
+$("#txd-del").addEventListener("click", async () => {
+  const id = detailTxId;
+  if (!id) return;
+  if (!confirm("Hapus transaksi ini?")) return;
+  try {
+    await api("/api/tx/" + id, { method: "DELETE" });
+    toast("Dihapus 🗑️");
+    closeTxDetail();
+    if (currentTab === "dashboard") loadDashboard().catch(() => {});
+    else loadTx().catch(() => {});
+  } catch (e) {
+    toast(e.message, false);
+  }
 });
 
 async function api(path, opts = {}) {
@@ -271,14 +332,18 @@ async function loadDashboard() {
     : `<p class="muted">Belum ada data bulan ini.</p>`;
 
   const { transactions } = await api(`/api/transactions?limit=5&from=${month}-01&to=${month}-31`);
+  state.recentTx = transactions;
   $("#recent-list").innerHTML = transactions.length
     ? transactions.map(txRow).join("")
     : `<p class="muted">Belum ada transaksi.</p>`;
+  document.querySelectorAll("#recent-list .tx-row").forEach((row) =>
+    row.addEventListener("click", () => showTxDetail(row.dataset.txId))
+  );
 }
 
 function txRow(t) {
   return `
-  <div class="tx-row ${t.type}">
+  <div class="tx-row ${t.type} tappable" data-tx-id="${t.id}">
     <div class="tx-ico">${catIcon(t.category, t.type)}</div>
     <div class="tx-main"><b>${escHtml(t.category)}</b>
       <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}</span>
@@ -371,7 +436,7 @@ async function loadTx() {
     ? transactions
         .map(
           (t) => `
-    <div class="tx-row ${t.type}">
+    <div class="tx-row ${t.type}" data-tx-id="${t.id}">
       <input type="checkbox" class="tx-check" data-id="${t.id}" title="Pilih" />
       <div class="tx-ico">${catIcon(t.category, t.type)}</div>
       <div class="tx-main"><b>${escHtml(t.category)}</b>
@@ -400,6 +465,13 @@ async function loadTx() {
     img.addEventListener("error", () => (img.style.display = "none"));
     img.addEventListener("click", () => openLightbox({ src: img.src, fullUrl: img.src }));
   });
+  // Tap baris (selain tombol/checkbox/thumbnail) → detail transaksi
+  document.querySelectorAll("#tx-list .tx-row").forEach((row) =>
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, img, a")) return;
+      showTxDetail(row.dataset.txId);
+    })
+  );
 }
 
 // ---------------- pilih massal + hapus massal ----------------

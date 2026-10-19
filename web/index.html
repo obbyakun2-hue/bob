@@ -228,6 +228,29 @@
   <footer class="foot muted">💰 Catatan Uang — data tersimpan aman di Cloudflare</footer>
 </div>
 
+<!-- DETAIL TRANSAKSI -->
+<div id="tx-detail" class="lightbox" hidden>
+  <div class="lightbox-backdrop" id="tx-detail-backdrop"></div>
+  <div class="lightbox-box">
+    <div class="txd-head" id="txd-head">
+      <div class="tx-ico" id="txd-ico">💰</div>
+      <div class="tx-main"><b id="txd-cat"></b><span class="muted" id="txd-date"></span></div>
+      <div class="tx-amt" id="txd-amt"></div>
+    </div>
+    <div class="txd-rows">
+      <div><span class="muted">Tipe</span><b id="txd-type"></b></div>
+      <div><span class="muted">Diinput oleh</span><b id="txd-by"></b></div>
+      <div><span class="muted">Catatan</span><b id="txd-note"></b></div>
+      <div id="txd-receipt-row"><span class="muted">Struk</span><img id="txd-receipt" class="tx-receipt-thumb" alt="struk" /></div>
+    </div>
+    <div class="row lightbox-actions">
+      <button id="txd-edit" class="btn sm">Ubah</button>
+      <button id="txd-del" class="btn sm danger">Hapus</button>
+      <button id="txd-close" class="btn sm">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <!-- LIGHTBOX preview gambar -->
 <div id="lightbox" class="lightbox" hidden>
   <div class="lightbox-backdrop" id="lightbox-backdrop"></div>
