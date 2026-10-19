@@ -92,27 +92,52 @@ jobs:
           fi
 
           echo "🔍 Mengecek KV namespace..."
+          KV_TITLE="$NAME-receipts"
 
+          # Pastikan API KV bisa diakses (token valid) sebelum lanjut
           set +e
-            KV_LIST=$(pnpm wrangler kv namespace list 2>&1)
-            STATUS=$?
+            PROBE=$(pnpm wrangler kv namespace list 2>&1)
+            PROBE_STATUS=$?
           set -e
-
-          if [ $STATUS -ne 0 ]; then
-            echo "$KV_LIST"
+          if [ $PROBE_STATUS -ne 0 ]; then
+            echo "$PROBE"
+            echo "❌ Gagal mengakses KV API — cek CLOUDFLARE_API_TOKEN."
             exit 1
           fi
 
-          KV_TITLE="$NAME-receipts"
+          # Cari ID namespace berdasarkan title
+          find_kv_id() {
+            pnpm wrangler kv namespace list 2>/dev/null \
+              | jq -r ".[] | select(.title == \"$KV_TITLE\") | .id" 2>/dev/null \
+              | head -n 1
+          }
 
-          if echo "$KV_LIST" | jq -e ".[] | select(.title == \"$KV_TITLE\")" >/dev/null; then
+          KV_ID=$(find_kv_id)
+
+          if [ -n "$KV_ID" ]; then
             echo "✅ KV namespace $KV_TITLE sudah ada."
-            KV_ID=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"$KV_TITLE\") | .id")
           else
             echo "⚠️ KV namespace $KV_TITLE belum ada, membuat baru..."
-            pnpm wrangler kv namespace create "$KV_TITLE"
-            KV_LIST=$(pnpm wrangler kv namespace list)
-            KV_ID=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"$KV_TITLE\") | .id")
+            CREATE_OUT=$(pnpm wrangler kv namespace create "$KV_TITLE" 2>&1)
+            echo "$CREATE_OUT"
+            # ID paling akurat ada di output create itu sendiri
+            KV_ID=$(printf '%s' "$CREATE_OUT" | grep -oE '"id"[[:space:]]*:[[:space:]]*"[a-f0-9]{32}"' | head -n 1 | grep -oE '[a-f0-9]{32}' || true)
+            # Fallback: baca ulang dari list (tunggu propagasi API bila perlu)
+            if [ -z "$KV_ID" ]; then
+              for i in 1 2 3; do
+                sleep 5
+                KV_ID=$(find_kv_id)
+                [ -n "$KV_ID" ] && break
+              done
+            fi
+          fi
+
+          # JANGAN PERNAH sed dengan ID kosong — fail fast dengan pesan jelas
+          if [ -z "$KV_ID" ]; then
+            echo "❌ Gagal mendapatkan ID KV namespace \"$KV_TITLE\"."
+            echo "   Solusi cepat: buat/cek manual di dash.cloudflare.com → Workers & Pages → KV,"
+            echo "   lalu isi secret KV_NAMESPACE_ID dengan ID-nya dan re-run workflow."
+            exit 1
           fi
 
           sed -i "s|\${KV_NAMESPACE_ID}|$KV_ID|g" "$CONFIG_FILE"
@@ -151,8 +176,27 @@ jobs:
             D1_ID=$(echo "$DB_LIST" | jq -r ".[] | select(.name == \"$NAME\") | .uuid")
           fi
 
+          # JANGAN PERNAH sed dengan ID kosong — fail fast dengan pesan jelas
+          if [ -z "$D1_ID" ]; then
+            echo "❌ Gagal mendapatkan D1 database ID."
+            exit 1
+          fi
+
           sed -i "s|\${D1_DATABASE_ID}|$D1_ID|g" "$CONFIG_FILE"
           echo "✅ D1 siap: $D1_ID"
+
+      - name: 🔎 Validasi konfigurasi akhir
+        working-directory: ./worker
+        run: |
+          # Safety net: pastikan tidak ada placeholder ${...} yang belum terisi.
+          # Kalau ada yang lolos, gagalkan di sini dengan pesan jelas —
+          # jangan sampai deploy dengan config rusak seperti kasus id kosong.
+          if grep -qE '\$\{[A-Za-z_][A-Za-z0-9_]*\}' wrangler-action.toml; then
+            echo "❌ Masih ada placeholder yang belum terisi di wrangler-action.toml:"
+            grep -nE '\$\{[A-Za-z_][A-Za-z0-9_]*\}' wrangler-action.toml || true
+            exit 1
+          fi
+          echo "✅ Semua placeholder terisi, siap deploy."
 
       - name: 🚀 Deploy ke Cloudflare Workers
         id: deploy
