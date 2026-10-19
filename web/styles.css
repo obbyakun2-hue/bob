@@ -328,6 +328,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .lightbox-actions { margin-top: 12px; justify-content: center; }
 
 /* ---------- dialog konfirmasi/prompt ---------- */
+#dlg { z-index: 200; }
 .dlg-box { width: min(92vw, 400px); text-align: center; }
 .dlg-msg { margin: 6px 0 4px; font-weight: 600; }
 .dlg-input { width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 1em; }
