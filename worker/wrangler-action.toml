@@ -1,0 +1,26 @@
+# TEMPLATE — placeholder ${...} diganti dari GitHub Secrets oleh workflow deploy.
+# Jangan isi nilai asli di sini.
+
+name = "${NAME}"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+[assets]
+directory = "../web"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "${NAME}"
+database_id = "${D1_DATABASE_ID}"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "${R2_BUCKET_NAME}"
+
+[vars]
+JWT_SECRET = "${JWT_SECRET}"
+ADMIN_USERNAME = "${ADMIN_USERNAME}"
+ADMIN_PASSWORD = "${ADMIN_PASSWORD}"
+TELEGRAM_BOT_TOKEN = "${TELEGRAM_BOT_TOKEN}"
+TELEGRAM_CHAT_ID = "${TELEGRAM_CHAT_ID}"

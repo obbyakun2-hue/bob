@@ -1,0 +1,1 @@
+{"devDependencies":{"wrangler":"^3.114.0"},"name":"uang-tracker-worker","private":true,"scripts":{"deploy":"wrangler deploy -c wrangler-action.toml","dev":"wrangler dev -c wrangler-action.toml"},"type":"module","version":"1.0.0"}
