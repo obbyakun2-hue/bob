@@ -368,7 +368,10 @@ export default {
           setIf("category", String(b.category || "").slice(0, 80), (v) => v.length > 0);
           setIf("amount", Math.floor(Number(b.amount) || 0), (v) => v > 0);
           setIf("note", String(b.note ?? "").slice(0, 500));
-          setIf("receipt_key", String(b.receipt_key ?? "").slice(0, 200));
+          if (b.receipt_key !== undefined) {
+            fields.push("receipt_key = ?");
+            params.push(String(b.receipt_key).slice(0, 200));
+          }
           if (b.input_by !== undefined) {
             fields.push("input_by = ?");
             params.push(String(b.input_by).trim().slice(0, 40));

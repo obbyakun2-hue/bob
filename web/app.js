@@ -914,7 +914,7 @@ function resetForm() {
 $("#tx-cancel").addEventListener("click", resetForm);
 
 function startEdit(id) {
-  const t = state.lastTx.find((x) => x.id === id);
+  const t = findTx(id);
   if (!t) return;
   state.editingId = id;
   setFormType(t.type);
