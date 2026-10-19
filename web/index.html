@@ -101,7 +101,14 @@
         <button id="f-apply" class="btn primary">Tampilkan</button>
         <button id="f-export" class="btn">Export CSV</button>
       </div>
-      <div class="card"><div id="tx-list"></div></div>
+      <div class="card">
+        <div class="sel-bar" id="sel-bar" hidden>
+          <label class="sel-all"><input type="checkbox" id="tx-select-all" /> Pilih semua</label>
+          <span class="muted" id="sel-count">0 dipilih</span>
+          <button class="btn sm danger" id="tx-del-selected">Hapus yang dipilih</button>
+        </div>
+        <div id="tx-list"></div>
+      </div>
     </section>
 
     <!-- TAMBAH -->

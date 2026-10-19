@@ -309,6 +309,12 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .tx-act { display: flex; gap: 6px; flex-shrink: 0; }
 .tx-main a { color: #0ea5e9; font-weight: 600; text-decoration: none; }
 
+/* ---------- pilih massal (checkbox) ---------- */
+.sel-bar { display: flex; align-items: center; gap: 12px; padding: 4px 6px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.sel-bar .sel-all { display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; font-size: 0.9em; }
+.sel-bar input[type="checkbox"], .tx-check { width: 18px; height: 18px; margin: 0; padding: 0; flex-shrink: 0; accent-color: #10b981; cursor: pointer; }
+#sel-count { flex: 1; font-size: 0.85em; }
+
 /* ---------- borongan ---------- */
 #bulk-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .bulk-row {

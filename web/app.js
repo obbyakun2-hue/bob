@@ -328,11 +328,15 @@ async function loadTx() {
   if ($("#f-q").value.trim()) p.set("q", $("#f-q").value.trim());
   const { transactions } = await api("/api/transactions?" + p.toString());
   state.lastTx = transactions;
+  selectedIds.clear();
+  $("#sel-bar").hidden = transactions.length === 0;
+  updateSelBar();
   $("#tx-list").innerHTML = transactions.length
     ? transactions
         .map(
           (t) => `
     <div class="tx-row ${t.type}">
+      <input type="checkbox" class="tx-check" data-id="${t.id}" title="Pilih" />
       <div class="tx-ico">${catIcon(t.category, t.type)}</div>
       <div class="tx-main"><b>${escHtml(t.category)}</b>
         <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}${
@@ -350,7 +354,52 @@ async function loadTx() {
     : `<p class="muted">Tidak ada transaksi pada filter ini.</p>`;
   document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => startEdit(b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => delTx(b.dataset.del)));
+  document.querySelectorAll(".tx-check").forEach((c) =>
+    c.addEventListener("change", () => {
+      if (c.checked) selectedIds.add(c.dataset.id);
+      else selectedIds.delete(c.dataset.id);
+      updateSelBar();
+    })
+  );
 }
+
+// ---------------- pilih massal + hapus massal ----------------
+const selectedIds = new Set();
+
+function updateSelBar() {
+  const n = selectedIds.size;
+  $("#sel-count").textContent = `${n} dipilih`;
+  const boxes = document.querySelectorAll(".tx-check");
+  const all = $("#tx-select-all");
+  all.checked = boxes.length > 0 && n === boxes.length;
+  all.indeterminate = n > 0 && n < boxes.length;
+}
+
+$("#tx-select-all").addEventListener("change", (e) => {
+  document.querySelectorAll(".tx-check").forEach((c) => {
+    c.checked = e.target.checked;
+    if (c.checked) selectedIds.add(c.dataset.id);
+    else selectedIds.delete(c.dataset.id);
+  });
+  updateSelBar();
+});
+
+$("#tx-del-selected").addEventListener("click", async () => {
+  const n = selectedIds.size;
+  if (!n) return;
+  if (!confirm(`Hapus ${n} transaksi yang dipilih?`)) return;
+  try {
+    const r = await api("/api/transactions", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [...selectedIds] }),
+    });
+    toast(`${r.deleted} transaksi dihapus 🗑️`);
+    await loadTx();
+  } catch (e) {
+    toast(e.message, false);
+  }
+});
 
 async function delTx(id) {
   if (!confirm("Hapus transaksi ini?")) return;

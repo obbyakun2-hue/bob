@@ -281,6 +281,26 @@ export default {
           return json({ transaction: tx }, 201);
         }
 
+        // Hapus massal: body {ids: [...]} — dipakai checkbox "pilih semua".
+        if (request.method === "DELETE") {
+          const b = await request.json().catch(() => ({}));
+          const ids = Array.isArray(b.ids)
+            ? [...new Set(b.ids.filter((x) => typeof x === "string" && x.length <= 64))].slice(0, 200)
+            : [];
+          if (!ids.length) return json({ error: "Tidak ada yang dipilih" }, 400);
+          const ph = ids.map(() => "?").join(",");
+          let receipts = [];
+          try {
+            const r = await env.DB.prepare(`SELECT receipt_key FROM transactions WHERE id IN (${ph})`).bind(...ids).all();
+            receipts = (r.results || []).map((x) => x.receipt_key).filter(Boolean);
+          } catch { /* abaikan */ }
+          await env.DB.prepare(`DELETE FROM transactions WHERE id IN (${ph})`).bind(...ids).run();
+          if (env.RECEIPTS) {
+            for (const k of receipts) { try { await env.RECEIPTS.delete(k); } catch { /* abaikan */ } }
+          }
+          return json({ ok: true, deleted: ids.length });
+        }
+
         return json({ error: "method not allowed" }, 405);
       }
 
