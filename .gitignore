@@ -3,3 +3,4 @@ node_modules/
 .dev.vars
 deploy.log
 .DS_Store
+wrangler.local.toml
