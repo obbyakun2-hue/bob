@@ -156,6 +156,10 @@
         <label>Nominal (Rp)<input id="tx-amount" inputmode="numeric" placeholder="0" required /></label>
         <label>Catatan<textarea id="tx-note" rows="3" placeholder="cth: makan siang"></textarea></label>
         <label>Foto struk <em class="hint">(opsional, otomatis dikompres ke WebP)</em><input type="file" id="tx-file" accept="image/*" /></label>
+        <div id="tx-preview-wrap" hidden>
+          <img id="tx-preview" alt="Preview struk" />
+          <button type="button" id="tx-preview-del" class="btn sm danger">✕ Hapus foto</button>
+        </div>
         <div class="row">
           <button type="submit" class="btn primary" id="tx-submit">Simpan</button>
           <button type="button" class="btn ghost" id="tx-cancel" hidden>Batal</button>
@@ -222,6 +226,19 @@
   </main>
 
   <footer class="foot muted">💰 Catatan Uang — data tersimpan aman di Cloudflare</footer>
+</div>
+
+<!-- LIGHTBOX preview gambar -->
+<div id="lightbox" class="lightbox" hidden>
+  <div class="lightbox-backdrop" id="lightbox-backdrop"></div>
+  <div class="lightbox-box">
+    <img id="lightbox-img" alt="Preview" />
+    <div class="row lightbox-actions">
+      <a id="lightbox-open" class="btn sm" target="_blank" rel="noopener">🔗 Buka penuh</a>
+      <button id="lightbox-remove" class="btn sm danger" hidden>🗑️ Hapus foto</button>
+      <button id="lightbox-close" class="btn sm">Tutup</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>

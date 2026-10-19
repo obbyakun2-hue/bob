@@ -315,6 +315,18 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .sel-bar input[type="checkbox"], .tx-check { width: 18px; height: 18px; margin: 0; padding: 0; flex-shrink: 0; accent-color: #10b981; cursor: pointer; }
 #sel-count { flex: 1; font-size: 0.85em; }
 
+/* ---------- preview & lightbox ---------- */
+#tx-preview-wrap { margin: 4px 0 13px; display: flex; align-items: center; gap: 10px; }
+#tx-preview-wrap[hidden] { display: none; }
+#tx-preview { width: 76px; height: 76px; object-fit: cover; border-radius: 14px; border: 1px solid var(--border); cursor: zoom-in; }
+.tx-receipt-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 13px; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; }
+.lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.lightbox[hidden] { display: none; }
+.lightbox-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.78); }
+.lightbox-box { position: relative; width: min(92vw, 560px); background: var(--card); border-radius: 18px; padding: 14px; border: 1px solid var(--border); }
+.lightbox-box img { width: 100%; max-height: 68vh; object-fit: contain; border-radius: 12px; background: #0b0f1a; display: block; }
+.lightbox-actions { margin-top: 12px; justify-content: center; }
+
 /* ---------- hutang ---------- */
 .debt-badge { display: inline-block; font-size: 0.78em; font-weight: 700; padding: 2px 10px; border-radius: 20px; margin-top: 5px; width: fit-content; }
 .debt-badge.belum { background: rgba(245, 158, 11, 0.15); color: #d97706; }

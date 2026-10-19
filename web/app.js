@@ -13,6 +13,7 @@ const state = {
   debtType: "hutang",
   editingDebtId: null,
   debts: [],
+  removeReceipt: false,
 };
 
 const fmtIDR = (n) => "Rp" + Number(n || 0).toLocaleString("id-ID");
@@ -69,6 +70,37 @@ function toast(msg, ok = true) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.className = ""), 2600);
 }
+
+// Lightbox: preview gambar ukuran besar (dipakai struk di form, borongan, daftar)
+function openLightbox({ src, fullUrl, onRemove }) {
+  if (!src) return;
+  $("#lightbox-img").src = src;
+  const openBtn = $("#lightbox-open");
+  if (fullUrl) {
+    openBtn.href = fullUrl;
+    openBtn.hidden = false;
+  } else {
+    openBtn.hidden = true;
+  }
+  const rmBtn = $("#lightbox-remove");
+  rmBtn.hidden = !onRemove;
+  rmBtn.onclick = () => {
+    closeLightbox();
+    if (onRemove) onRemove();
+  };
+  $("#lightbox").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function closeLightbox() {
+  $("#lightbox").hidden = true;
+  $("#lightbox-img").src = "";
+  document.body.style.overflow = "";
+}
+$("#lightbox-close").addEventListener("click", closeLightbox);
+$("#lightbox-backdrop").addEventListener("click", closeLightbox);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#lightbox").hidden) closeLightbox();
+});
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -343,11 +375,10 @@ async function loadTx() {
       <input type="checkbox" class="tx-check" data-id="${t.id}" title="Pilih" />
       <div class="tx-ico">${catIcon(t.category, t.type)}</div>
       <div class="tx-main"><b>${escHtml(t.category)}</b>
-        <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}${
-            t.receipt_key ? ` • <a href="/api/receipt/${t.receipt_key}" target="_blank">🧾 struk</a>` : ""
-          }</span>
+        <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}</span>
       </div>
       <div class="tx-amt">${t.type === "in" ? "+" : "-"}${fmtIDR(t.amount)}</div>
+      ${t.receipt_key ? `<img class="tx-receipt-thumb" src="/api/receipt/${t.receipt_key}" alt="struk" loading="lazy" title="Tap untuk preview" />` : ""}
       <div class="tx-act">
         <button class="btn sm" data-edit="${t.id}">Ubah</button>
         <button class="btn sm danger" data-del="${t.id}">Hapus</button>
@@ -365,6 +396,10 @@ async function loadTx() {
       updateSelBar();
     })
   );
+  document.querySelectorAll(".tx-receipt-thumb").forEach((img) => {
+    img.addEventListener("error", () => (img.style.display = "none"));
+    img.addEventListener("click", () => openLightbox({ src: img.src, fullUrl: img.src }));
+  });
 }
 
 // ---------------- pilih massal + hapus massal ----------------
@@ -643,15 +678,29 @@ function addBulkRow() {
     div.remove();
     bulkCount--;
   });
-  // Foto struk per baris — tap tombol untuk pilih/ganti, tampil thumbnail
+  // Foto struk per baris — belum ada foto: tap = pilih; sudah ada: tap = preview besar
   const photoBtn = div.querySelector(".b-photo");
   const fileInput = div.querySelector(".b-file");
-  photoBtn.addEventListener("click", () => fileInput.click());
+  photoBtn.addEventListener("click", () => {
+    const img = photoBtn.querySelector("img");
+    if (img && fileInput.files[0]) {
+      openLightbox({
+        src: img.src,
+        onRemove: () => {
+          fileInput.value = "";
+          photoBtn.textContent = "📷";
+          photoBtn.title = "Foto struk (opsional)";
+        },
+      });
+    } else {
+      fileInput.click();
+    }
+  });
   fileInput.addEventListener("change", () => {
     const f = fileInput.files[0];
     if (f) {
       photoBtn.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="struk" />`;
-      photoBtn.title = "Struk: " + f.name + " (tap untuk ganti)";
+      photoBtn.title = "Tap untuk preview";
     } else {
       photoBtn.textContent = "📷";
       photoBtn.title = "Foto struk (opsional)";
@@ -753,13 +802,41 @@ $("#tx-amount").addEventListener("input", (e) => {
   e.target.value = digits ? Number(digits).toLocaleString("id-ID") : "";
 });
 
+// Preview foto struk di form satu-satu
+function clearTxPhoto() {
+  $("#tx-file").value = "";
+  $("#tx-preview-wrap").hidden = true;
+  $("#tx-preview").src = "";
+  if (state.editingId) state.removeReceipt = true; // saat ubah: tandai struk dihapus
+}
+$("#tx-file").addEventListener("change", () => {
+  const f = $("#tx-file").files[0];
+  state.removeReceipt = false;
+  if (f) {
+    $("#tx-preview").src = URL.createObjectURL(f);
+    $("#tx-preview-wrap").hidden = false;
+  } else {
+    $("#tx-preview-wrap").hidden = true;
+    $("#tx-preview").src = "";
+  }
+});
+$("#tx-preview").addEventListener("click", () => {
+  const src = $("#tx-preview").src;
+  if (!src || $("#tx-preview-wrap").hidden) return;
+  openLightbox({ src, fullUrl: src, onRemove: clearTxPhoto });
+});
+$("#tx-preview-del").addEventListener("click", clearTxPhoto);
+
 function resetForm() {
   state.editingId = null;
+  state.removeReceipt = false;
   $("#form-title").textContent = "Tambah Transaksi";
   $("#tx-submit").textContent = "Simpan";
   $("#tx-cancel").hidden = true;
   $("#tx-form").reset();
   $("#tx-date").value = todayStr();
+  $("#tx-preview-wrap").hidden = true;
+  $("#tx-preview").src = "";
   setFormType("out");
 }
 $("#tx-cancel").addEventListener("click", resetForm);
@@ -780,6 +857,15 @@ function startEdit(id) {
     inpSel.appendChild(opt);
   }
   if (t.input_by) inpSel.value = t.input_by;
+  // Preview struk yang sudah ada (kalau ada)
+  state.removeReceipt = false;
+  if (t.receipt_key) {
+    $("#tx-preview").src = "/api/receipt/" + t.receipt_key;
+    $("#tx-preview-wrap").hidden = false;
+  } else {
+    $("#tx-preview-wrap").hidden = true;
+    $("#tx-preview").src = "";
+  }
   $("#form-title").textContent = "Ubah Transaksi";
   $("#tx-submit").textContent = "Simpan Perubahan";
   $("#tx-cancel").hidden = false;
@@ -857,7 +943,13 @@ $("#tx-form").addEventListener("submit", async (e) => {
       notified = ud.notified === true;
       via = ud.via || "";
     }
-    const body = { ...txData, ...(receipt_key ? { receipt_key, notified } : {}) };
+    const body = { ...txData };
+    if (receipt_key) {
+      body.receipt_key = receipt_key;
+      body.notified = notified;
+    } else if (state.editingId && state.removeReceipt) {
+      body.receipt_key = ""; // struk dihapus saat ubah
+    }
     if (state.editingId) {
       await api("/api/transactions/" + state.editingId, {
         method: "PUT",
