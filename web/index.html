@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Catatan Uang</title>
+<title>KIBY — Catatan Keuangan</title>
+<link rel="icon" type="image/png" href="favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -15,8 +16,8 @@
 <!-- LOGIN -->
 <div id="login-view" class="login-wrap">
   <form id="login-form" class="card login-card">
-    <div class="logo">💰</div>
-    <h1>Catatan Uang</h1>
+    <img class="logo-img" src="logo.png" alt="KIBY" />
+    <h1>KIBY</h1>
     <p class="muted">Kelola pemasukan &amp; pengeluaranmu<br />dengan rapi dan aman.</p>
     <label>Username<input id="username" autocomplete="username" required placeholder="Username" /></label>
     <label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="Password" /></label>
@@ -27,7 +28,7 @@
 <!-- APP -->
 <div id="app-view" hidden>
   <header class="topbar">
-    <div class="brand"><span class="brand-logo">💰</span><span>Catatan Uang</span></div>
+    <div class="brand"><img class="brand-logo-img" src="logo.png" alt="KIBY" /><span>KIBY</span></div>
     <nav>
       <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
       <button class="nav-btn" data-tab="transaksi">Transaksi</button>
