@@ -81,6 +81,28 @@ export async function sendPhotoByFileId(env, fileId, caption) {
   }
 }
 
+// Kirim pesan tes — mengembalikan {ok:true} atau {ok:false, error}.
+// Dipakai tombol "Tes Telegram" di aplikasi biar masalah config langsung kelihatan.
+export async function testTelegram(env) {
+  if (!env.TELEGRAM_BOT_TOKEN) return { ok: false, error: "TELEGRAM_BOT_TOKEN kosong di worker" };
+  if (!env.TELEGRAM_CHAT_ID) return { ok: false, error: "TELEGRAM_CHAT_ID kosong di worker" };
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: env.TELEGRAM_CHAT_ID,
+        text: "🔔 Tes notifikasi KIBY — kalau kamu baca ini, notif Telegram sudah jalan ✅",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: `Telegram API ${res.status}: ${data.description || "gagal"}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 // Kirim notif transaksi. photoBytes = ArrayBuffer struk (opsional).
 // Tidak pernah melempar error — kegagalan notif tidak menggagalkan pencatatan.
 export async function notifyTransaction(env, tx, photoBytes) {

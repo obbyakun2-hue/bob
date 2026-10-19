@@ -122,6 +122,17 @@ $("#theme-btn").addEventListener("click", () => {
   updateThemeBtn();
   if (!$("#tab-dashboard").hidden) loadDashboard().catch(() => {});
 });
+$("#tg-test-btn").addEventListener("click", async () => {
+  const btn = $("#tg-test-btn");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/telegram-test", { method: "POST" });
+    toast(r.ok ? "Pesan tes terkirim ke Telegram ✅ — cek HP-mu" : "Gagal: " + r.error, r.ok);
+  } catch (e) {
+    toast(e.message, false);
+  }
+  btn.disabled = false;
+});
 
 async function showApp() {
   $("#login-view").hidden = true;

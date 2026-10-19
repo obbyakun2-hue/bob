@@ -3,13 +3,13 @@
 
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
-import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId } from "./telegram.js";
+import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram } from "./telegram.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -203,6 +203,12 @@ export default {
         return json({ error: "not found" }, 404);
       }
 
+      // ---------- tes notifikasi Telegram (diagnosa config) ----------
+      if (path === "/api/telegram-test" && request.method === "POST") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        return json(await testTelegram(env));
+      }
+
       // ---------- koleksi transaksi ----------
       if (path === "/api/transactions") {
         if (!(await getAuthUser(request, env))) return unauthorized();
@@ -259,7 +265,7 @@ export default {
             const mTgKey = tx.receipt_key.match(/^tg:([A-Za-z0-9_-]{10,200})$/);
             if (mTgKey) {
               // Foto sudah ada di Telegram: kirim ulang via file_id + caption
-              sendPhotoByFileId(env, mTgKey[1], txMessage(tx)).catch(() => {});
+              ctx.waitUntil(sendPhotoByFileId(env, mTgKey[1], txMessage(tx)));
             } else {
               let photoBytes = null;
               if (tx.receipt_key && env.RECEIPTS) {
@@ -267,7 +273,7 @@ export default {
                   photoBytes = await env.RECEIPTS.get(tx.receipt_key, { type: "arrayBuffer" });
                 } catch { /* abaikan */ }
               }
-              notifyTransaction(env, tx, photoBytes).catch(() => {});
+              ctx.waitUntil(notifyTransaction(env, tx, photoBytes));
             }
           }
           return json({ transaction: tx }, 201);
@@ -309,7 +315,7 @@ export default {
         await env.DB.batch(
           txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.created_at))
         );
-        notifyBatch(env, txs, input_by).catch(() => {});
+        ctx.waitUntil(notifyBatch(env, txs, input_by));
         return json({ count: txs.length, transactions: txs }, 201);
       }
 
