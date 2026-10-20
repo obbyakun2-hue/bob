@@ -21,9 +21,6 @@ jobs:
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
-      WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
-      WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
@@ -241,10 +238,7 @@ jobs:
             ADMIN_USERNAME: $ENV.ADMIN_USERNAME,
             ADMIN_PASSWORD: $ENV.ADMIN_PASSWORD,
             TELEGRAM_BOT_TOKEN: $ENV.TELEGRAM_BOT_TOKEN,
-            TELEGRAM_CHAT_ID: $ENV.TELEGRAM_CHAT_ID,
-            WHATSAPP_TOKEN: $ENV.WHATSAPP_TOKEN,
-            WHATSAPP_PHONE_NUMBER_ID: $ENV.WHATSAPP_PHONE_NUMBER_ID,
-            WHATSAPP_TO: $ENV.WHATSAPP_TO
+            TELEGRAM_CHAT_ID: $ENV.TELEGRAM_CHAT_ID
           } | with_entries(select(.value != ""))' > "$SECRETS_FILE"
           pnpm wrangler secret bulk -c wrangler-action.toml "$SECRETS_FILE"
           rm -f "$SECRETS_FILE"
