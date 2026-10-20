@@ -102,7 +102,7 @@ uang-tracker/
 ├── web/
 │   ├── index.html
 │   ├── styles.css
-│   └── app.js                     # dashboard, grafik, filter, form, export CSV
+│   └── app.js                     # dashboard, grafik, filter, form, export CSV, sidebar menu, dokumen
 └── README.md
 ```
 
@@ -120,11 +120,15 @@ uang-tracker/
 | `PUT /api/transactions/:id` | ✅ | Ubah |
 | `DELETE /api/transactions/:id` | ✅ | Hapus (+ hapus struk di KV) |
 | `GET /api/summary?month=YYYY-MM` | ✅ | Total masuk/keluar/saldo, per kategori, harian |
-| `POST /api/upload` | ✅ | Upload struk (maks 5MB, browser kompres ke WebP dulu). Coba Telegram dulu → `tg:<file_id>`; fallback KV → `kv:...`. Terima meta transaksi (date/type/category/amount/note): kalau via Telegram, foto + caption notif dikirim sekali jalan |
+| `POST /api/upload` | ✅ | Upload struk (maks 5MB, browser kompres ke WebP dulu). Coba Telegram dulu → `tg:<file_id>`; fallback KV → `kv:...`. Terima meta transaksi (date/type/category/amount/note): kalau via Telegram, foto + caption notif dikirim sekali jalan. Terima juga `label` untuk upload non-transaksi (mis. foto dokumen) → caption "📄 \<label\>" |
 | `GET /api/receipt/<key>` | — | Lihat struk (URL tak-tertebak). Key `tg:<file_id>` → proxy `getFile` Telegram (token tetap di server); key `kv:...` → KV |
+| `GET /api/documents` | ✅ | List dokumen (arsip + foto) |
+| `POST /api/documents` | ✅ | Tambah dokumen — `title` & `photo_key` wajib |
+| `DELETE /api/documents/:id` | ✅ | Hapus dokumen (+ hapus foto di KV bila `kv:...`) |
 
 ## 6. Catatan
 
+- **Menu sidebar kiri:** 📊 *Management* (dashboard, transaksi, tambah, hutang) dan 📄 *Dokumen* (arsip dokumen penting beserta foto: judul, jenis, tanggal, catatan, foto wajib). Di layar kecil sidebar menjadi bottom bar.
 - Nominal disimpan sebagai **integer Rupiah** di D1.
 - Foto struk selalu dikompres ke **WebP** (maks 1280px, kualitas 75, orientasi EXIF dikoreksi) di browser sebelum upload — rata-rata 50-150KB per struk.
 - **Penyimpanan struk hybrid (jaga-jaga):** upload mencoba **Telegram dulu** — foto dikirim via `sendPhoto` ke chat Telegram; kalau meta transaksi disertakan, caption notifikasi ikut terkirim **sekali jalan** (tidak ada pesan ganda). `file_id` yang dikembalikan disimpan di D1 sebagai `receipt_key` format `tg:<file_id>`; saat ditampilkan, Worker proxy via `getFile` (token bot tidak bocor ke browser). Kalau Telegram tidak dikonfigurasi/gagal → otomatis fallback ke **KV** (`kv:...`). Tidak perlu secret tambahan.

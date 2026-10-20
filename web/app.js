@@ -15,6 +15,7 @@ const state = {
   debts: [],
   removeReceipt: false,
   recentTx: [],
+  docs: [],
 };
 
 const fmtIDR = (n) => "Rp" + Number(n || 0).toLocaleString("id-ID");
@@ -303,6 +304,8 @@ async function showApp() {
   $("#f-to").value = `${m}-${pad(dim)}`;
   buildCategoryFilter();
   resetForm();
+  resetDocForm();
+  switchMenu("management");
   switchTab("dashboard");
 }
 
@@ -323,6 +326,19 @@ function switchTab(name) {
   if (name === "transaksi") loadTx().catch((e) => toast(e.message, false));
   if (name === "hutang") loadDebts().catch((e) => toast(e.message, false));
 }
+
+// ---------------- menu sidebar: Management vs Dokumen ----------------
+function switchMenu(name) {
+  document.querySelectorAll(".side-btn").forEach((b) => b.classList.toggle("active", b.dataset.menu === name));
+  document.querySelector(".content").dataset.menu = name;
+  $("#view-management").hidden = name !== "management";
+  $("#view-dokumen").hidden = name !== "dokumen";
+  if (name === "dokumen") loadDocs().catch((e) => toast(e.message, false));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".side-btn").forEach((b) =>
+  b.addEventListener("click", () => switchMenu(b.dataset.menu))
+);
 
 // ---------------- dashboard ----------------
 $("#dash-month").addEventListener("change", () => loadDashboard().catch((e) => toast(e.message, false)));
@@ -811,6 +827,130 @@ $("#debt-form").addEventListener("submit", async (e) => {
     }
     resetDebtForm();
     await loadDebts();
+  } catch (err) {
+    toast(err.message, false);
+  }
+  btn.textContent = btnLabel;
+  btn.disabled = false;
+});
+
+// ---------------- dokumen (arsip dokumen + foto) ----------------
+// Ikon per jenis dokumen biar tampilannya hidup
+const DOC_ICONS = {
+  "KTP": "🪪", "KK": "👨‍👩‍👧", "SIM": "🚗", "STNK": "🛵", "BPKB": "📕",
+  "Sertifikat": "📜", "Ijazah": "🎓", "Kwitansi": "🧾", "Nota": "🧾", "Kontrak": "📝",
+};
+const docIcon = (category) => DOC_ICONS[category] || "📄";
+
+function resetDocForm() {
+  $("#doc-form").reset();
+  $("#doc-date").value = todayStr();
+  $("#doc-file").value = "";
+  $("#doc-preview-wrap").hidden = true;
+  $("#doc-preview").src = "";
+}
+$("#doc-file").addEventListener("change", () => {
+  const f = $("#doc-file").files[0];
+  if (f) {
+    $("#doc-preview").src = URL.createObjectURL(f);
+    $("#doc-preview-wrap").hidden = false;
+  } else {
+    $("#doc-preview-wrap").hidden = true;
+    $("#doc-preview").src = "";
+  }
+});
+$("#doc-preview-del").addEventListener("click", () => {
+  $("#doc-file").value = "";
+  $("#doc-preview-wrap").hidden = true;
+  $("#doc-preview").src = "";
+});
+$("#doc-preview").addEventListener("click", () => {
+  const src = $("#doc-preview").src;
+  if (!src || $("#doc-preview-wrap").hidden) return;
+  openLightbox({ src, fullUrl: src });
+});
+
+function docRow(d) {
+  return `
+  <div class="tx-row">
+    <div class="tx-ico">${docIcon(d.category)}</div>
+    <div class="tx-main"><b>${escHtml(d.title)}</b>
+      <span class="muted">${d.category ? escHtml(d.category) + " • " : ""}${fmtDate(d.doc_date)}${d.note ? " • " + escHtml(d.note) : ""}</span>
+    </div>
+    ${d.photo_key ? `<img class="tx-receipt-thumb doc-thumb" src="/api/receipt/${d.photo_key}" alt="foto dokumen" loading="lazy" title="Tap untuk preview" />` : ""}
+    <div class="tx-act">
+      <button class="btn sm danger" data-doc-del="${d.id}">Hapus</button>
+    </div>
+  </div>`;
+}
+
+async function loadDocs() {
+  $("#doc-list").innerHTML = '<div class="loading">Memuat dokumen…</div>';
+  const { documents } = await api("/api/documents");
+  state.docs = documents;
+  $("#doc-count").textContent = documents.length ? `${documents.length} dokumen` : "";
+  $("#doc-list").innerHTML = documents.length
+    ? documents.map(docRow).join("")
+    : `<p class="muted">Belum ada dokumen. Tambahkan dokumen pertamamu lewat form di atas 👆</p>`;
+  document.querySelectorAll("[data-doc-del]").forEach((b) =>
+    b.addEventListener("click", () => delDoc(b.dataset.docDel))
+  );
+  document.querySelectorAll(".doc-thumb").forEach((img) => {
+    img.addEventListener("error", () => (img.style.display = "none"));
+    img.addEventListener("click", () => openLightbox({ src: img.src, fullUrl: img.src }));
+  });
+}
+
+async function delDoc(id) {
+  if (!(await confirmDlg("Hapus dokumen ini? Foto yang tersimpan ikut dihapus."))) return;
+  try {
+    await api("/api/documents/" + id, { method: "DELETE" });
+    toast("Dokumen dihapus 🗑️");
+    await loadDocs();
+  } catch (e) {
+    toast(e.message, false);
+  }
+}
+
+$("#doc-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("#doc-submit");
+  const btnLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Menyimpan…";
+  try {
+    const title = $("#doc-title").value.trim();
+    if (!title) throw new Error("Judul dokumen harus diisi");
+    const file = $("#doc-file").files[0];
+    if (!file) throw new Error("Foto dokumen wajib diunggah");
+    // Upload foto dulu (kompres ke WebP biar hemat storage).
+    // Caption Telegram dikirim sekali jalan via label.
+    btn.textContent = "Mengupload foto…";
+    const fd = new FormData();
+    fd.append("file", await toUploadFile(file));
+    fd.append("label", "Dokumen: " + title);
+    const up = await fetch("/api/upload", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + state.token },
+      body: fd,
+    });
+    const ud = await up.json().catch(() => ({}));
+    if (!up.ok) throw new Error(ud.error || "Upload foto gagal");
+    btn.textContent = "Menyimpan…";
+    await api("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        category: $("#doc-category").value,
+        doc_date: $("#doc-date").value || todayStr(),
+        note: $("#doc-note").value.trim(),
+        photo_key: ud.key,
+      }),
+    });
+    toast("Dokumen tersimpan ✅");
+    resetDocForm();
+    await loadDocs();
   } catch (err) {
     toast(err.message, false);
   }

@@ -27,6 +27,16 @@
 
 <!-- APP -->
 <div id="app-view" hidden>
+  <aside class="sidebar">
+    <div class="side-brand"><img class="brand-logo-img" src="logo.png" alt="KIBY" /><span>KIBY</span></div>
+    <p class="side-title muted">MENU</p>
+    <nav class="side-nav">
+      <button class="side-btn active" data-menu="management"><span class="side-ico">📊</span><span class="side-label">Management</span></button>
+      <button class="side-btn" data-menu="dokumen"><span class="side-ico">📄</span><span class="side-label">Dokumen</span></button>
+    </nav>
+  </aside>
+
+  <div class="content" data-menu="management">
   <header class="topbar">
     <div class="brand"><img class="brand-logo-img" src="logo.png" alt="KIBY" /><span>KIBY</span></div>
     <nav>
@@ -42,6 +52,7 @@
     </div>
   </header>
 
+  <div id="view-management">
   <main>
     <!-- DASHBOARD -->
     <section id="tab-dashboard" class="tab">
@@ -224,8 +235,55 @@
       </form>
     </section>
   </main>
+  </div><!-- /view-management -->
+
+  <!-- DOKUMEN -->
+  <main id="view-dokumen" hidden>
+    <div class="dash-head">
+      <div>
+        <h2>📄 Dokumen</h2>
+        <p class="muted">Arsip dokumen penting beserta foto</p>
+      </div>
+    </div>
+
+    <form id="doc-form" class="card form-card">
+      <div class="card-title"><h3>Tambah Dokumen</h3></div>
+      <label>Judul dokumen<input id="doc-title" maxlength="120" placeholder="cth: KTP, Nota servis motor" required /></label>
+      <div class="form-grid">
+        <label>Jenis<select id="doc-category">
+          <option>KTP</option>
+          <option>KK</option>
+          <option>SIM</option>
+          <option>STNK</option>
+          <option>BPKB</option>
+          <option>Sertifikat</option>
+          <option>Ijazah</option>
+          <option>Kwitansi</option>
+          <option>Nota</option>
+          <option>Kontrak</option>
+          <option selected>Lainnya</option>
+        </select></label>
+        <label>Tanggal dokumen<input type="date" id="doc-date" /></label>
+      </div>
+      <label>Catatan <em class="hint">(opsional)</em><textarea id="doc-note" rows="2" placeholder="cth: KTP baru, berlaku seumur hidup"></textarea></label>
+      <label>Foto dokumen <em class="hint">(wajib, otomatis dikompres ke WebP)</em><input type="file" id="doc-file" accept="image/*" required /></label>
+      <div id="doc-preview-wrap" hidden>
+        <img id="doc-preview" alt="Preview dokumen" />
+        <button type="button" id="doc-preview-del" class="btn sm danger">✕ Hapus foto</button>
+      </div>
+      <div class="row">
+        <button type="submit" class="btn primary" id="doc-submit">Simpan Dokumen</button>
+      </div>
+    </form>
+
+    <div class="card">
+      <div class="card-title"><h3>Daftar Dokumen</h3><span class="muted" id="doc-count"></span></div>
+      <div id="doc-list"></div>
+    </div>
+  </main>
 
   <footer class="foot muted">💰 KIBY — data tersimpan aman di Cloudflare</footer>
+  </div><!-- /content -->
 </div>
 
 <!-- DIALOG KONFIRMASI / PROMPT (pengganti confirm()/prompt() native) -->

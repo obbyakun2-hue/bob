@@ -154,6 +154,10 @@ export default {
           input_by: String(form.get("input_by") || "").slice(0, 40),
         };
         const hasMeta = meta.amount > 0 && DATE_RE.test(meta.date);
+        // Label bebas untuk upload non-transaksi (mis. "Dokumen: KTP").
+        // Di-escape karena caption dikirim dengan parse_mode HTML.
+        const label = String(form.get("label") || "").slice(0, 80)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
         // --- Jalur 1: Telegram ---
         if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
@@ -161,7 +165,7 @@ export default {
             const bytes = await file.arrayBuffer();
             const tgForm = new FormData();
             tgForm.append("chat_id", env.TELEGRAM_CHAT_ID);
-            tgForm.append("caption", hasMeta ? txMessage(meta) : "🧾 Struk");
+            tgForm.append("caption", hasMeta ? txMessage(meta) : label ? `📄 ${label}` : "🧾 Struk");
             tgForm.append("parse_mode", "HTML");
             tgForm.append("photo", new Blob([bytes], { type: "image/webp" }), "struk.webp");
             const tgRes = await fetch(
@@ -547,6 +551,66 @@ export default {
         if (request.method === "DELETE") {
           const del = await env.DB.prepare("DELETE FROM debts WHERE id = ?").bind(id).run();
           if (!del.meta.changes) return json({ error: "Data hutang tidak ditemukan" }, 404);
+          return json({ ok: true });
+        }
+
+        return json({ error: "method not allowed" }, 405);
+      }
+
+      // ---------- dokumen (arsip dokumen + foto) ----------
+      if (path === "/api/documents") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+
+        if (request.method === "GET") {
+          const { results } = await env.DB.prepare(
+            "SELECT * FROM documents ORDER BY doc_date DESC, created_at DESC"
+          ).all();
+          return json({ documents: results || [] });
+        }
+
+        if (request.method === "POST") {
+          const b = await request.json().catch(() => ({}));
+          const title = String(b.title || "").trim().slice(0, 120);
+          const category = String(b.category || "").trim().slice(0, 40);
+          let doc_date = String(b.doc_date || "").slice(0, 10);
+          // Default: hari ini (WIB) kalau tanggal tak valid / tak dikirim.
+          if (!DATE_RE.test(doc_date)) {
+            doc_date = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+          }
+          const note = String(b.note || "").slice(0, 500);
+          const photo_key = String(b.photo_key || "").slice(0, 200);
+          if (!title) return json({ error: "Judul dokumen harus diisi" }, 400);
+          if (!photo_key) return json({ error: "Foto dokumen wajib diunggah" }, 400);
+          const doc = {
+            id: crypto.randomUUID(),
+            title, category, doc_date, note, photo_key,
+            created_at: new Date().toISOString(),
+          };
+          await env.DB.prepare(
+            "INSERT INTO documents (id, title, category, doc_date, note, photo_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+          ).bind(doc.id, doc.title, doc.category, doc.doc_date, doc.note, doc.photo_key, doc.created_at).run();
+          return json({ document: doc }, 201);
+        }
+
+        return json({ error: "method not allowed" }, 405);
+      }
+
+      const mDoc = path.match(/^\/api\/documents\/([A-Za-z0-9-]+)$/);
+      if (mDoc) {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        const id = mDoc[1];
+
+        if (request.method === "DELETE") {
+          const row = await env.DB.prepare("SELECT photo_key FROM documents WHERE id = ?")
+            .bind(id).first();
+          if (!row) return json({ error: "Dokumen tidak ditemukan" }, 404);
+          await env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(id).run();
+          // Bersihkan foto di KV kalau tersimpan di sana (format kv:...).
+          // Foto Telegram (tg:...) tak bisa dihapus via API — keterbatasan yang sama
+          // seperti struk transaksi.
+          if (row?.photo_key && row.photo_key.startsWith("kv:") && env.RECEIPTS) {
+            try { await env.RECEIPTS.delete(row.photo_key); } catch { /* abaikan */ }
+          }
           return json({ ok: true });
         }
 

@@ -10,6 +10,8 @@ const SCHEMA_STATEMENTS = [
   "CREATE TABLE IF NOT EXISTS categories (name TEXT PRIMARY KEY, type TEXT NOT NULL CHECK (type IN ('in', 'out')))",
   "CREATE TABLE IF NOT EXISTS inputters (name TEXT PRIMARY KEY)",
   "CREATE TABLE IF NOT EXISTS debts (id TEXT PRIMARY KEY, type TEXT NOT NULL CHECK (type IN ('hutang', 'piutang')), person TEXT NOT NULL, amount INTEGER NOT NULL CHECK (amount >= 0), start_date TEXT NOT NULL, due_date TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'belum', input_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT '', doc_date TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', photo_key TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS idx_doc_date ON documents (doc_date)",
 ];
 
 const DEFAULT_CATEGORIES = [
