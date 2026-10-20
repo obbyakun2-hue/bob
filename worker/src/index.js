@@ -155,9 +155,23 @@ export default {
         };
         const hasMeta = meta.amount > 0 && DATE_RE.test(meta.date);
         // Label bebas untuk upload non-transaksi (mis. "Dokumen: KTP").
+        // Untuk dokumen, frontend juga mengirim doc_category/doc_date/doc_note
+        // agar caption Telegram-nya lengkap (judul + jenis + tanggal + catatan).
         // Di-escape karena caption dikirim dengan parse_mode HTML.
-        const label = String(form.get("label") || "").slice(0, 80)
-          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const escTg = (s) =>
+          String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const label = escTg(String(form.get("label") || "").slice(0, 80));
+        const docCaption = (() => {
+          if (!label.startsWith("Dokumen:")) return "";
+          const lines = [`📄 ${label}`];
+          const dc = escTg(String(form.get("doc_category") || "").slice(0, 40));
+          const dd = String(form.get("doc_date") || "").slice(0, 10);
+          const dn = escTg(String(form.get("doc_note") || "").slice(0, 500));
+          if (dc) lines.push(`Jenis: ${dc}`);
+          if (DATE_RE.test(dd)) lines.push(`Tanggal: ${dd}`);
+          if (dn) lines.push(`Catatan: ${dn}`);
+          return lines.join("\n");
+        })();
 
         // --- Jalur 1: Telegram ---
         if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
@@ -165,7 +179,7 @@ export default {
             const bytes = await file.arrayBuffer();
             const tgForm = new FormData();
             tgForm.append("chat_id", env.TELEGRAM_CHAT_ID);
-            tgForm.append("caption", hasMeta ? txMessage(meta) : label ? `📄 ${label}` : "🧾 Struk");
+            tgForm.append("caption", hasMeta ? txMessage(meta) : docCaption || (label ? `📄 ${label}` : "🧾 Struk"));
             tgForm.append("parse_mode", "HTML");
             tgForm.append("photo", new Blob([bytes], { type: "image/webp" }), "struk.webp");
             const tgRes = await fetch(

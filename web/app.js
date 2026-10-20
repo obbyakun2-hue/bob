@@ -929,6 +929,10 @@ $("#doc-form").addEventListener("submit", async (e) => {
     const fd = new FormData();
     fd.append("file", await toUploadFile(file));
     fd.append("label", "Dokumen: " + title);
+    // Detail dokumen ikut dikirim agar caption notifikasi Telegram lengkap.
+    fd.append("doc_category", $("#doc-category").value);
+    fd.append("doc_date", $("#doc-date").value || todayStr());
+    fd.append("doc_note", $("#doc-note").value.trim());
     const up = await fetch("/api/upload", {
       method: "POST",
       headers: { Authorization: "Bearer " + state.token },

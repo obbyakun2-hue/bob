@@ -120,7 +120,7 @@ uang-tracker/
 | `PUT /api/transactions/:id` | ✅ | Ubah |
 | `DELETE /api/transactions/:id` | ✅ | Hapus (+ hapus struk di KV) |
 | `GET /api/summary?month=YYYY-MM` | ✅ | Total masuk/keluar/saldo, per kategori, harian |
-| `POST /api/upload` | ✅ | Upload struk (maks 5MB, browser kompres ke WebP dulu). Coba Telegram dulu → `tg:<file_id>`; fallback KV → `kv:...`. Terima meta transaksi (date/type/category/amount/note): kalau via Telegram, foto + caption notif dikirim sekali jalan. Terima juga `label` untuk upload non-transaksi (mis. foto dokumen) → caption "📄 \<label\>" |
+| `POST /api/upload` | ✅ | Upload struk (maks 5MB, browser kompres ke WebP dulu). Coba Telegram dulu → `tg:<file_id>`; fallback KV → `kv:...`. Terima meta transaksi (date/type/category/amount/note): kalau via Telegram, foto + caption notif dikirim sekali jalan. Terima juga `label` untuk upload non-transaksi: kalau label diawali "Dokumen:", caption dilengkapi dari `doc_category`/`doc_date`/`doc_note` → notifikasi Telegram berisi judul + jenis + tanggal + catatan dokumen |
 | `GET /api/receipt/<key>` | — | Lihat struk (URL tak-tertebak). Key `tg:<file_id>` → proxy `getFile` Telegram (token tetap di server); key `kv:...` → KV |
 | `GET /api/documents` | ✅ | List dokumen (arsip + foto) |
 | `POST /api/documents` | ✅ | Tambah dokumen — `title` & `photo_key` wajib |
