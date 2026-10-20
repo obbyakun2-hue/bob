@@ -374,9 +374,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 #sel-count { flex: 1; font-size: 0.85em; }
 
 /* ---------- preview & lightbox ---------- */
-#tx-preview-wrap { margin: 4px 0 13px; display: flex; align-items: center; gap: 10px; }
-#tx-preview-wrap[hidden] { display: none; }
-#tx-preview { width: 76px; height: 76px; object-fit: cover; border-radius: 14px; border: 1px solid var(--border); cursor: zoom-in; }
+#tx-preview-wrap, #doc-preview-wrap { margin: 4px 0 13px; display: flex; align-items: center; gap: 10px; }
+#tx-preview-wrap[hidden], #doc-preview-wrap[hidden] { display: none; }
+#tx-preview, #doc-preview { width: 76px; height: 76px; object-fit: cover; border-radius: 14px; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; }
 .tx-receipt-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 13px; border: 1px solid var(--border); cursor: zoom-in; flex-shrink: 0; }
 .lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .lightbox[hidden] { display: none; }
