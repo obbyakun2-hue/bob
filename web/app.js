@@ -940,6 +940,10 @@ $("#doc-form").addEventListener("submit", async (e) => {
     });
     const ud = await up.json().catch(() => ({}));
     if (!up.ok) throw new Error(ud.error || "Upload foto gagal");
+    // via: "telegram" kalau foto benar-benar terkirim ke Telegram,
+    // "kv" kalau fallback (Telegram tak dikonfigurasi / gagal kirim).
+    // Ditampilkan jujur di toast biar tidak dikira terkirim.
+    const viaTelegram = ud.via === "telegram";
     btn.textContent = "Menyimpan…";
     await api("/api/documents", {
       method: "POST",
@@ -952,7 +956,11 @@ $("#doc-form").addEventListener("submit", async (e) => {
         photo_key: ud.key,
       }),
     });
-    toast("Dokumen tersimpan ✅");
+    toast(
+      viaTelegram
+        ? "Dokumen tersimpan ✅ — terkirim ke Telegram 📲"
+        : "Dokumen tersimpan ✅ — ⚠️ tidak terkirim ke Telegram"
+    );
     resetDocForm();
     await loadDocs();
   } catch (err) {
