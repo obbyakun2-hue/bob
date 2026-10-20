@@ -126,7 +126,26 @@ uang-tracker/
 | `POST /api/documents` | ✅ | Tambah dokumen — `title` & `photo_key` wajib |
 | `DELETE /api/documents/:id` | ✅ | Hapus dokumen (+ hapus foto di KV bila `kv:...`) |
 
-## 6. Catatan
+## 6. Notifikasi WhatsApp untuk Dokumen (opsional)
+
+Setiap dokumen baru yang disimpan otomatis dikirim sebagai foto + keterangan ke nomor WA kamu via WhatsApp Business Cloud API (resmi Meta, gratis 1000 percakapan/bulan). Tanpa kredensial, fitur ini diam nonaktif — dokumen tetap tersimpan normal.
+
+**Setup sekali saja (di dashboard Meta):**
+1. Buat aplikasi di developers.facebook.com (tipe Business) → tambah produk WhatsApp. Meta memberi nomor telepon test gratis.
+2. Daftarkan nomor WA pribadimu sebagai penerima (verifikasi kode OTP).
+3. Catat **Phone Number ID** dari nomor pengirim (di halaman API Setup).
+4. Buat token permanen: Business Settings → Users → System Users → Add (Admin) → Add assets (aplikasi + akun WhatsApp, Full control) → Generate token (Never expire, centang `whatsapp_business_messaging`). Token hanya tampil sekali — salin segera.
+5. Isi 3 GitHub Secrets lalu re-run workflow deploy (otomatis terkirim terenkripsi via `wrangler secret bulk`):
+   - `WHATSAPP_TOKEN` — token permanen tadi
+   - `WHATSAPP_PHONE_NUMBER_ID` — ID nomor pengirim
+   - `WHATSAPP_TO` — nomor WA tujuan, format `628xxxxxxxxxx` (tanpa `+`)
+
+**Catatan:**
+- Nomor yang didaftarkan sebagai pengirim Cloud API tidak bisa dipakai lagi di aplikasi WhatsApp biasa — pakai nomor test/kedua untuk pengirim.
+- Pesan bebas hanya terkirim dalam 24 jam setelah kamu chat ke nomor bisnis; di luar itu perlu message template (kategori Utility) yang disetujui Meta. Kegagalan tercatat di log worker, penyimpanan dokumen tidak terpengaruh.
+- Untuk dev lokal, taruh ketiga nilai di atas di `.dev.vars` (sudah di `.gitignore`).
+
+## 7. Catatan
 
 - **Menu sidebar kiri:** 📊 *Management* (dashboard, transaksi, tambah, hutang) dan 📄 *Dokumen* (arsip dokumen penting beserta foto: judul, jenis, tanggal, catatan, foto wajib). Di layar kecil sidebar menjadi bottom bar.
 - Nominal disimpan sebagai **integer Rupiah** di D1.

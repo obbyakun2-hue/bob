@@ -4,6 +4,7 @@
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
 import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram, notifyDebt, notifyDebtPaid } from "./telegram.js";
+import { sendWhatsAppDoc } from "./whatsapp.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -589,6 +590,13 @@ export default {
           await env.DB.prepare(
             "INSERT INTO documents (id, title, category, doc_date, note, photo_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
           ).bind(doc.id, doc.title, doc.category, doc.doc_date, doc.note, doc.photo_key, doc.created_at).run();
+          // Notif WhatsApp: kirim foto dokumen + keterangan ke nomor user.
+          // Fire-and-forget — diam bila WA belum dikonfigurasi, dan gagal
+          // kirim tidak menggagalkan penyimpanan dokumen.
+          // URL foto publik (tanpa auth, key tak-tertebak) agar bisa
+          // diambil Meta: https://<domain>/api/receipt/<key>.
+          const photoUrl = new URL(request.url).origin + "/api/receipt/" + doc.photo_key;
+          ctx.waitUntil(sendWhatsAppDoc(env, doc, photoUrl));
           return json({ document: doc }, 201);
         }
 
