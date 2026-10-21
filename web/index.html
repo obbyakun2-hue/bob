@@ -137,13 +137,6 @@
 
       <div id="bulk-wrap" class="card" hidden>
         <div class="card-title"><h3>Tambah Borongan</h3><span class="muted">Banyak transaksi sekaligus, 1 rekap Telegram</span></div>
-        <label>Diinput oleh
-          <div class="inputter-wrap">
-            <select class="inputter-select" id="bulk-inputter"></select>
-            <button type="button" class="btn sm inputter-add" title="Tambah nama">＋</button>
-            <button type="button" class="btn sm danger inputter-del" title="Hapus nama terpilih">✕</button>
-          </div>
-        </label>
         <div id="bulk-rows"></div>
         <div class="row">
           <button type="button" id="bulk-add" class="btn">＋ Tambah baris</button>
@@ -162,13 +155,6 @@
           <label>Tanggal<input type="date" id="tx-date" required /></label>
           <label>Kategori<select id="tx-category"></select></label>
         </div>
-        <label>Diinput oleh
-          <div class="inputter-wrap">
-            <select class="inputter-select" id="tx-inputter"></select>
-            <button type="button" class="btn sm inputter-add" title="Tambah nama">＋</button>
-            <button type="button" class="btn sm danger inputter-del" title="Hapus nama terpilih">✕</button>
-          </div>
-        </label>
         <label>Nominal (Rp)<input id="tx-amount" inputmode="numeric" placeholder="0" required /></label>
         <label>Catatan<textarea id="tx-note" rows="3" placeholder="cth: makan siang"></textarea></label>
         <label>Foto struk <em class="hint">(opsional, otomatis dikompres ke WebP)</em><input type="file" id="tx-file" accept="image/*" /></label>
@@ -224,13 +210,6 @@
           <label>Mulai hutang<input type="date" id="debt-start" required /></label>
           <label>Tenggat <em class="hint">(opsional)</em><input type="date" id="debt-due" /></label>
         </div>
-        <label>Diinput oleh
-          <div class="inputter-wrap">
-            <select class="inputter-select" id="debt-inputter"></select>
-            <button type="button" class="btn sm inputter-add" title="Tambah nama">＋</button>
-            <button type="button" class="btn sm danger inputter-del" title="Hapus nama terpilih">✕</button>
-          </div>
-        </label>
         <label>Nominal (Rp)<input id="debt-amount" inputmode="numeric" placeholder="0" required /></label>
         <label>Catatan<textarea id="debt-note" rows="2" placeholder="cth: pinjam buat modal"></textarea></label>
         <div class="row">

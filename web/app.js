@@ -27,6 +27,9 @@ const OWNER_META = {
 };
 const ownerLabel = (o) => (OWNER_META[o] ? OWNER_META[o].label : "Kita");
 const ownerIcon = (o) => (OWNER_META[o] ? OWNER_META[o].icon : "👥");
+// Penginput tidak lagi dipilih manual — selalu nama pemilik menu aktif.
+const INPUTTER_BY_OWNER = { bobby: "Bobby", killa: "Killa", kita: "kita" };
+const ownerInputter = () => INPUTTER_BY_OWNER[state.owner] || "kita";
 
 function syncOwnerUI() {
   document.querySelectorAll(".owner-btn").forEach((b) =>
@@ -818,13 +821,6 @@ function startEditDebt(id) {
   $("#debt-due").value = d.due_date || "";
   $("#debt-amount").value = Number(d.amount).toLocaleString("id-ID");
   $("#debt-note").value = d.note || "";
-  const inpSel = $("#debt-inputter");
-  if (d.input_by && ![...inpSel.options].some((o) => o.value === d.input_by)) {
-    const opt = document.createElement("option");
-    opt.textContent = d.input_by;
-    inpSel.appendChild(opt);
-  }
-  if (d.input_by) inpSel.value = d.input_by;
   $("#debt-submit").textContent = "Simpan Perubahan";
   window.scrollTo(0, document.body.scrollHeight);
 }
@@ -847,7 +843,7 @@ $("#debt-form").addEventListener("submit", async (e) => {
       start_date: $("#debt-start").value,
       due_date: $("#debt-due").value || "",
       note: $("#debt-note").value.trim(),
-      input_by: $("#debt-inputter").value || "",
+      input_by: ownerInputter(),
       owner: state.owner,
     };
     if (state.editingDebtId) {
@@ -1113,7 +1109,7 @@ $("#bulk-submit").addEventListener("click", async () => {
     toast("Isi dulu minimal 1 baris", false);
     return;
   }
-  const input_by = $("#bulk-inputter").value || "";
+  const input_by = ownerInputter();
   const btn = $("#bulk-submit");
   const btnLabel = btn.textContent;
   btn.disabled = true;
@@ -1233,13 +1229,6 @@ function startEdit(id) {
   $("#tx-category").value = t.category;
   $("#tx-amount").value = Number(t.amount).toLocaleString("id-ID");
   $("#tx-note").value = t.note || "";
-  const inpSel = $("#tx-inputter");
-  if (t.input_by && ![...inpSel.options].some((o) => o.value === t.input_by)) {
-    const opt = document.createElement("option");
-    opt.textContent = t.input_by;
-    inpSel.appendChild(opt);
-  }
-  if (t.input_by) inpSel.value = t.input_by;
   // Preview struk yang sudah ada (kalau ada)
   state.removeReceipt = false;
   if (t.receipt_key) {
@@ -1306,7 +1295,7 @@ $("#tx-form").addEventListener("submit", async (e) => {
       category: $("#tx-category").value,
       amount,
       note: $("#tx-note").value.trim(),
-      input_by: $("#tx-inputter").value || "",
+      input_by: ownerInputter(),
       owner: state.owner,
     };
     let receipt_key = "";
