@@ -384,6 +384,7 @@ document.querySelectorAll(".side-btn").forEach((b) =>
 
 // ---------------- dashboard ----------------
 $("#dash-month").addEventListener("change", () => loadDashboard().catch((e) => toast(e.message, false)));
+$("#ins-debt-card").addEventListener("click", () => switchTab("hutang"));
 
 async function loadDashboard() {
   const month = $("#dash-month").value || todayStr().slice(0, 7);
@@ -396,6 +397,31 @@ async function loadDashboard() {
   countUp($("#stat-out"), s.totalOut);
   countUp($("#stat-balance"), s.balance);
   $("#stat-balance").closest(".stat").classList.toggle("neg", s.balance < 0);
+  $("#hero-chip").textContent = `${ownerIcon(state.owner)} ${ownerLabel(state.owner)}`;
+  const pct = s.totalIn > 0 ? Math.min(100, Math.round((s.totalOut / s.totalIn) * 100)) : s.totalOut > 0 ? 100 : 0;
+  $("#spend-bar").style.width = pct + "%";
+  $("#spend-note").textContent =
+    s.totalIn === 0 && s.totalOut === 0
+      ? "Belum ada transaksi bulan ini"
+      : s.totalIn === 0
+        ? "Belum ada pemasukan bulan ini"
+        : `Pengeluaran ${pct}% dari pemasukan${pct >= 100 ? " — hati-hati, lagi boros 🔥" : pct >= 75 ? " — mulai mendekati batas" : " — masih aman 👍"}`;
+
+  // Insight cepat dari data summary
+  const outCats = s.byCategory.filter((c) => c.type === "out");
+  const topCat = outCats[0];
+  $("#ins-top-cat").textContent = topCat ? topCat.category : "—";
+  $("#ins-top-cat-amt").textContent = topCat ? `${fmtIDR(topCat.total)} • ${topCat.n}x transaksi` : "belum ada pengeluaran";
+  const daysInMonth = new Date(parseInt(yy, 10), parseInt(mm, 10), 0).getDate();
+  const nowD = new Date();
+  const isCurrentMonth = month === `${nowD.getFullYear()}-${pad(nowD.getMonth() + 1)}`;
+  const elapsed = isCurrentMonth ? nowD.getDate() : daysInMonth;
+  $("#ins-avg-out").textContent = fmtIDR(Math.round(s.totalOut / Math.max(1, elapsed)));
+  $("#ins-avg-note").textContent = `dari ${elapsed} hari`;
+  const nIn = s.byCategory.filter((c) => c.type === "in").reduce((a, c) => a + c.n, 0);
+  const nOut = outCats.reduce((a, c) => a + c.n, 0);
+  $("#ins-tx-count").textContent = `${nIn + nOut} transaksi`;
+  $("#ins-tx-note").textContent = `${nIn} masuk • ${nOut} keluar`;
 
   const chartCanvas = $("#chart-daily");
   const chartWrap = chartCanvas?.closest(".chart-wrap");
@@ -441,6 +467,40 @@ async function loadDashboard() {
       '<p class="muted" style="padding:24px;text-align:center">Grafik tidak tersedia — CDN Chart.js gagal dimuat.</p>';
   }
 
+  // Donut pengeluaran per kategori (6 teratas + Lainnya)
+  const donutCanvas = $("#chart-cat");
+  if (window.Chart && donutCanvas) {
+    if (state.chartCat) state.chartCat.destroy();
+    const top = outCats.slice(0, 6);
+    const restTotal = outCats.slice(6).reduce((a, c) => a + c.total, 0);
+    const dLabels = top.map((c) => c.category);
+    const dValues = top.map((c) => c.total);
+    if (restTotal > 0) { dLabels.push("Lainnya"); dValues.push(restTotal); }
+    $("#donut-empty").hidden = dValues.length > 0;
+    donutCanvas.style.display = dValues.length ? "" : "none";
+    if (dValues.length) {
+      const darkD = document.documentElement.dataset.theme === "dark";
+      state.chartCat = new Chart(donutCanvas, {
+        type: "doughnut",
+        data: {
+          labels: dLabels,
+          datasets: [{
+            data: dValues,
+            backgroundColor: ["#f43f5e", "#f59e0b", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#64748b"],
+            borderWidth: 2, borderColor: "transparent", spacing: 2,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: "62%",
+          plugins: {
+            legend: { position: "bottom", labels: { color: darkD ? "#8b94a9" : "#64748b", usePointStyle: true, pointStyle: "circle", boxWidth: 8 } },
+            tooltip: { callbacks: { label: (c) => ` ${fmtIDR(c.parsed)}` } },
+          },
+        },
+      });
+    }
+  }
+
   const max = Math.max(1, ...s.byCategory.map((c) => c.total));
   $("#cat-list").innerHTML = s.byCategory.length
     ? s.byCategory
@@ -459,6 +519,16 @@ async function loadDashboard() {
 
   const { transactions } = await api(`/api/transactions?limit=5&from=${month}-01&to=${month}-31&owner=${state.owner}`);
   state.recentTx = transactions;
+  // Insight hutang aktif milik pemilik ini (gagal → diam saja)
+  try {
+    const { debts: unpaidDebts } = await api("/api/debts?status=belum&owner=" + state.owner);
+    const owe = unpaidDebts.filter((d) => d.type !== "piutang").reduce((a, d) => a + d.amount, 0);
+    const owed = unpaidDebts.filter((d) => d.type === "piutang").reduce((a, d) => a + d.amount, 0);
+    $("#ins-debt").textContent = fmtIDR(owe);
+    $("#ins-debt-note").textContent = unpaidDebts.length
+      ? `${unpaidDebts.length} belum lunas${owed ? ` • piutang ${fmtIDR(owed)}` : ""}`
+      : "tidak ada hutang aktif 🎉";
+  } catch { /* abaikan */ }
   $("#recent-list").innerHTML = transactions.length
     ? transactions.map(txRow).join("")
     : `<p class="muted">Belum ada transaksi.</p>`;

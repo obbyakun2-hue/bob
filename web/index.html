@@ -63,30 +63,54 @@
     <section id="tab-dashboard" class="tab">
       <div class="dash-head">
         <div>
-          <h2>Ringkasan</h2>
+          <h2>Dashboard</h2>
           <p class="muted" id="dash-subtitle">Keuangan bulan ini</p>
         </div>
         <input type="month" id="dash-month" class="month-input" />
       </div>
 
-      <div class="stats">
-        <div class="card stat in">
-          <div class="stat-ico">💰</div>
-          <div class="stat-body"><span class="label">Pemasukan</span><span class="value" id="stat-in">Rp0</span></div>
+      <div class="card stat hero">
+        <div class="hero-top">
+          <span class="hero-label">⚖️ Saldo Bulan Ini</span>
+          <span class="hero-chip" id="hero-chip">👥 Kita</span>
         </div>
-        <div class="card stat out">
-          <div class="stat-ico">💸</div>
-          <div class="stat-body"><span class="label">Pengeluaran</span><span class="value" id="stat-out">Rp0</span></div>
+        <div class="hero-balance" id="stat-balance">Rp0</div>
+        <div class="hero-row">
+          <div class="hero-mini"><span class="hero-mini-label">💰 Pemasukan</span><b id="stat-in">Rp0</b></div>
+          <div class="hero-mini"><span class="hero-mini-label">💸 Pengeluaran</span><b id="stat-out">Rp0</b></div>
         </div>
-        <div class="card stat balance">
-          <div class="stat-ico">⚖️</div>
-          <div class="stat-body"><span class="label">Saldo Bulan Ini</span><span class="value" id="stat-balance">Rp0</span></div>
+        <div class="hero-bar"><i id="spend-bar"></i></div>
+        <p class="hero-note" id="spend-note">Pengeluaran 0% dari pemasukan</p>
+      </div>
+
+      <div class="insights">
+        <div class="card ins">
+          <span class="ins-ico">🔥</span>
+          <div class="ins-body"><span class="ins-label">Pengeluaran Terbesar</span><b id="ins-top-cat">—</b><small class="muted" id="ins-top-cat-amt"></small></div>
+        </div>
+        <div class="card ins">
+          <span class="ins-ico">📅</span>
+          <div class="ins-body"><span class="ins-label">Rata-rata Keluar / Hari</span><b id="ins-avg-out">—</b><small class="muted" id="ins-avg-note"></small></div>
+        </div>
+        <div class="card ins">
+          <span class="ins-ico">🧾</span>
+          <div class="ins-body"><span class="ins-label">Total Transaksi</span><b id="ins-tx-count">—</b><small class="muted" id="ins-tx-note"></small></div>
+        </div>
+        <div class="card ins tappable" id="ins-debt-card" title="Buka tab Hutang">
+          <span class="ins-ico">💳</span>
+          <div class="ins-body"><span class="ins-label">Hutang Belum Lunas</span><b id="ins-debt">—</b><small class="muted" id="ins-debt-note"></small></div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title"><h3>Arus Kas Harian</h3><span class="muted">Masuk vs keluar per tanggal</span></div>
-        <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+      <div class="grid2 charts-row">
+        <div class="card">
+          <div class="card-title"><h3>Arus Kas Harian</h3><span class="muted">Masuk vs keluar per tanggal</span></div>
+          <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><h3>Pengeluaran per Kategori</h3></div>
+          <div class="chart-wrap donut-wrap"><canvas id="chart-cat"></canvas><p id="donut-empty" class="muted" hidden>Belum ada pengeluaran bulan ini.</p></div>
+        </div>
       </div>
 
       <div class="grid2">
