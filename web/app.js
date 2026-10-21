@@ -878,27 +878,55 @@ const DOC_ICONS = {
 };
 const docIcon = (category) => DOC_ICONS[category] || "📄";
 
+const DOC_DROP_DEFAULT = 'Seret & letakkan foto di sini<br /><small>atau klik untuk memilih file</small>';
 function resetDocForm() {
   $("#doc-form").reset();
   $("#doc-date").value = todayStr();
   $("#doc-file").value = "";
   $("#doc-preview-wrap").hidden = true;
   $("#doc-preview").src = "";
+  $("#doc-drop-text").innerHTML = DOC_DROP_DEFAULT;
 }
 $("#doc-file").addEventListener("change", () => {
   const f = $("#doc-file").files[0];
   if (f) {
     $("#doc-preview").src = URL.createObjectURL(f);
     $("#doc-preview-wrap").hidden = false;
+    $("#doc-drop-text").innerHTML = `📄 ${escHtml(f.name)}<br /><small>klik / seret lagi untuk mengganti</small>`;
   } else {
     $("#doc-preview-wrap").hidden = true;
     $("#doc-preview").src = "";
+    $("#doc-drop-text").innerHTML = DOC_DROP_DEFAULT;
   }
 });
+// Drag & drop foto ke kotak dropzone (klik juga tetap bisa)
+const docDrop = $("#doc-drop");
+docDrop.addEventListener("click", () => $("#doc-file").click());
+docDrop.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#doc-file").click(); }
+});
+["dragenter", "dragover"].forEach((ev) =>
+  docDrop.addEventListener(ev, (e) => { e.preventDefault(); docDrop.classList.add("dragover"); })
+);
+["dragleave", "drop"].forEach((ev) =>
+  docDrop.addEventListener(ev, (e) => { e.preventDefault(); docDrop.classList.remove("dragover"); })
+);
+docDrop.addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (!f.type.startsWith("image/")) { toast("File harus berupa gambar", false); return; }
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  $("#doc-file").files = dt.files;
+  $("#doc-file").dispatchEvent(new Event("change"));
+});
+// Cegah browser membuka file kalau drop meleset dari kotak
+["dragover", "drop"].forEach((ev) => window.addEventListener(ev, (e) => e.preventDefault()));
 $("#doc-preview-del").addEventListener("click", () => {
   $("#doc-file").value = "";
   $("#doc-preview-wrap").hidden = true;
   $("#doc-preview").src = "";
+  $("#doc-drop-text").innerHTML = DOC_DROP_DEFAULT;
 });
 $("#doc-preview").addEventListener("click", () => {
   const src = $("#doc-preview").src;

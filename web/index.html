@@ -250,7 +250,12 @@
         <label>Tanggal dokumen<input type="date" id="doc-date" /></label>
       </div>
       <label>Catatan <em class="hint">(opsional)</em><textarea id="doc-note" rows="2" placeholder="cth: KTP baru, berlaku seumur hidup"></textarea></label>
-      <label>Foto dokumen <em class="hint">(wajib, otomatis dikompres ke WebP)</em><input type="file" id="doc-file" accept="image/*" required /></label>
+      <label>Foto dokumen <em class="hint">(wajib, otomatis dikompres ke WebP)</em></label>
+      <div id="doc-drop" class="dropzone" role="button" tabindex="0" title="Klik untuk memilih foto, atau seret foto ke sini">
+        <span class="dropzone-ico">📥</span>
+        <span class="dropzone-text" id="doc-drop-text">Seret &amp; letakkan foto di sini<br /><small>atau klik untuk memilih file</small></span>
+        <input type="file" id="doc-file" accept="image/*" hidden />
+      </div>
       <div id="doc-preview-wrap" hidden>
         <img id="doc-preview" alt="Preview dokumen" />
         <button type="button" id="doc-preview-del" class="btn sm danger">✕ Hapus foto</button>
