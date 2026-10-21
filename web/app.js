@@ -38,6 +38,12 @@ function syncOwnerUI() {
   document.querySelectorAll(".owner-btn").forEach((b) =>
     b.classList.toggle("active", !onOverview && b.dataset.owner === state.owner)
   );
+  // Menu Kita tidak punya Hutang: tab + kartu insight hutang disembunyikan.
+  const isKita = state.owner === "kita";
+  const hutangBtn = document.querySelector('.nav-btn[data-tab="hutang"]');
+  if (hutangBtn) hutangBtn.hidden = isKita;
+  const debtCard = $("#ins-debt-card");
+  if (debtCard) debtCard.hidden = isKita;
 }
 
 // Ganti pemilik aktif: semua tampilan Management ikut pemilik ini.
@@ -51,7 +57,7 @@ function setOwner(o) {
   syncOwnerUI();
   const activeTab = document.querySelector(".nav-btn.active")?.dataset.tab;
   if (activeTab === "transaksi") loadTx().catch((e) => toast(e.message, false));
-  else if (activeTab === "hutang") loadDebts().catch((e) => toast(e.message, false));
+  else if (activeTab === "hutang" && o !== "kita") loadDebts().catch((e) => toast(e.message, false));
   else if (activeTab === "dashboard") loadDashboard().catch((e) => toast(e.message, false));
   else switchTab("dashboard");
 }
