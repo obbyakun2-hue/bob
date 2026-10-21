@@ -9,6 +9,9 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const OWNER_LABEL = { bobby: "Bobby", killa: "Killa", kita: "Kita" };
+const ownerLabel = (o) => OWNER_LABEL[o] || "Kita";
+
 export function txMessage(tx) {
   const isIn = tx.type === "in";
   const emoji = isIn ? "💰" : "💸";
@@ -20,6 +23,7 @@ export function txMessage(tx) {
     `Tanggal : ${escapeHtml(tx.date)}`,
   ];
   if (tx.input_by) lines.push(`👤 Input oleh: ${escapeHtml(tx.input_by)}`);
+  lines.push(`🏷️ Milik: ${ownerLabel(tx.owner)}`);
   if (tx.note) lines.push(`Catatan : ${escapeHtml(tx.note)}`);
   return lines.join("\n");
 }
@@ -94,6 +98,7 @@ export function debtMessage(d) {
   ];
   if (d.due_date) lines.push(`Tenggat : ${escapeHtml(d.due_date)}`);
   if (d.input_by) lines.push(`👤 Input oleh: ${escapeHtml(d.input_by)}`);
+  lines.push(`🏷️ Milik: ${ownerLabel(d.owner)}`);
   if (d.note) lines.push(`Catatan : ${escapeHtml(d.note)}`);
   return lines.join("\n");
 }

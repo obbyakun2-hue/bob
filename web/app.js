@@ -16,7 +16,45 @@ const state = {
   removeReceipt: false,
   recentTx: [],
   docs: [],
+  owner: localStorage.getItem("uang_owner") || "kita",
 };
+
+// ---------------- pemilik data: Bobby / Killa / Kita ----------------
+const OWNER_META = {
+  bobby: { label: "Bobby", icon: "🧑" },
+  killa: { label: "Killa", icon: "👩" },
+  kita: { label: "Kita", icon: "👥" },
+};
+const ownerLabel = (o) => (OWNER_META[o] ? OWNER_META[o].label : "Kita");
+const ownerIcon = (o) => (OWNER_META[o] ? OWNER_META[o].icon : "👥");
+
+function syncOwnerUI() {
+  document.querySelectorAll(".owner-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.owner === state.owner)
+  );
+  document.querySelectorAll(".owner-select").forEach((s) => (s.value = state.owner));
+}
+
+// Ganti pemilik aktif: semua tampilan Management ikut pemilik ini.
+function setOwner(o) {
+  if (!OWNER_META[o]) return;
+  state.owner = o;
+  localStorage.setItem("uang_owner", o);
+  // Batalkan edit yang sedang jalan — datanya milik pemilik lain.
+  if (state.editingId) resetForm();
+  if (state.editingDebtId) resetDebtForm();
+  syncOwnerUI();
+  const activeTab = document.querySelector(".nav-btn.active")?.dataset.tab;
+  if (activeTab === "transaksi") loadTx().catch((e) => toast(e.message, false));
+  else if (activeTab === "hutang") loadDebts().catch((e) => toast(e.message, false));
+  else loadDashboard().catch((e) => toast(e.message, false));
+}
+document.querySelectorAll(".owner-btn").forEach((b) =>
+  b.addEventListener("click", () => {
+    switchMenu("management");
+    setOwner(b.dataset.owner);
+  })
+);
 
 const fmtIDR = (n) => "Rp" + Number(n || 0).toLocaleString("id-ID");
 const pad = (n) => String(n).padStart(2, "0");
@@ -167,6 +205,7 @@ function showTxDetail(id) {
   $("#txd-date").textContent = fmtDate(t.date);
   $("#txd-amt").textContent = (t.type === "in" ? "+" : "-") + fmtIDR(t.amount);
   $("#txd-type").textContent = t.type === "in" ? "💰 Pemasukan" : "💸 Pengeluaran";
+  $("#txd-owner").textContent = `${ownerIcon(t.owner)} ${ownerLabel(t.owner)}`;
   $("#txd-by").textContent = t.input_by || "—";
   $("#txd-note").textContent = t.note || "—";
   const rrow = $("#txd-receipt-row");
@@ -290,6 +329,7 @@ async function showApp() {
     const { inputters } = await api("/api/inputters");
     state.inputters = inputters;
     renderInputterSelects();
+    syncOwnerUI();
   } catch (err) {
     // Gagal ambil data awal (mis. token basi tapi belum 401) — kembali ke login
     // supaya tidak tampil aplikasi kosong/rusak.
@@ -348,8 +388,8 @@ async function loadDashboard() {
   $("#cat-list").innerHTML = '<div class="loading">Memuat…</div>';
   $("#recent-list").innerHTML = '<div class="loading">Memuat…</div>';
   const [yy, mm] = month.split("-");
-  $("#dash-subtitle").textContent = `Keuangan ${NAMA_BULAN[parseInt(mm, 10) - 1]} ${yy}`;
-  const s = await api("/api/summary?month=" + encodeURIComponent(month));
+  $("#dash-subtitle").textContent = `Keuangan ${ownerIcon(state.owner)} ${ownerLabel(state.owner)} • ${NAMA_BULAN[parseInt(mm, 10) - 1]} ${yy}`;
+  const s = await api("/api/summary?month=" + encodeURIComponent(month) + "&owner=" + state.owner);
   countUp($("#stat-in"), s.totalIn);
   countUp($("#stat-out"), s.totalOut);
   countUp($("#stat-balance"), s.balance);
@@ -415,7 +455,7 @@ async function loadDashboard() {
         .join("")
     : `<p class="muted">Belum ada data bulan ini.</p>`;
 
-  const { transactions } = await api(`/api/transactions?limit=5&from=${month}-01&to=${month}-31`);
+  const { transactions } = await api(`/api/transactions?limit=5&from=${month}-01&to=${month}-31&owner=${state.owner}`);
   state.recentTx = transactions;
   $("#recent-list").innerHTML = transactions.length
     ? transactions.map(txRow).join("")
@@ -508,7 +548,7 @@ async function loadTx() {
   applyBtn.disabled = true;
   $("#tx-list").innerHTML = '<div class="loading">Memuat transaksi…</div>';
   try {
-  const p = new URLSearchParams({ limit: 200, offset: 0 });
+  const p = new URLSearchParams({ limit: 200, offset: 0, owner: state.owner });
   if ($("#f-from").value) p.set("from", $("#f-from").value);
   if ($("#f-to").value) p.set("to", $("#f-to").value);
   if ($("#f-type").value) p.set("type", $("#f-type").value);
@@ -622,6 +662,7 @@ $("#f-export").addEventListener("click", async () => {
     toast("Menyiapkan CSV...");
     // Ambil SEMUA halaman sesuai filter aktif — bukan cuma 200 baris pertama.
     const base = new URLSearchParams();
+    base.set("owner", state.owner);
     if ($("#f-from").value) base.set("from", $("#f-from").value);
     if ($("#f-to").value) base.set("to", $("#f-to").value);
     if ($("#f-type").value) base.set("type", $("#f-type").value);
@@ -640,9 +681,9 @@ $("#f-export").addEventListener("click", async () => {
       if (all.length >= total || transactions.length < LIM) break;
       offset += LIM;
     }
-    const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Diinput oleh", "Catatan"]];
+    const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Kepunyaan", "Diinput oleh", "Catatan"]];
     for (const t of all)
-      rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, t.input_by || "", t.note || ""]);
+      rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, ownerLabel(t.owner), t.input_by || "", t.note || ""]);
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
@@ -674,6 +715,7 @@ function resetDebtForm() {
   state.editingDebtId = null;
   $("#debt-form").reset();
   $("#debt-start").value = todayStr();
+  $("#debt-owner").value = state.owner;
   setDebtType("hutang");
   $("#debt-form-title").textContent = "Tambah Hutang";
   $("#debt-submit").textContent = "Simpan";
@@ -699,8 +741,8 @@ async function loadDebts() {
   // Daftar tampil mengikuti filter, tapi statistik SELALU dari yang belum lunas
   // (biar ganti filter ke "Lunas" tidak mengnolkan angka).
   const [{ debts }, { debts: unpaid }] = await Promise.all([
-    api("/api/debts" + (status ? `?status=${status}` : "")),
-    api("/api/debts?status=belum"),
+    api("/api/debts?owner=" + state.owner + (status ? `&status=${status}` : "")),
+    api("/api/debts?status=belum&owner=" + state.owner),
   ]);
   state.debts = debts;
   const today = todayStr();
@@ -728,8 +770,7 @@ function debtRow(d) {
   <div class="tx-row ${isHutang ? "out" : "in"}${st.key === "lunas" ? " debt-lunas" : ""}">
     <div class="tx-ico">${isHutang ? "🔴" : "🟢"}</div>
     <div class="tx-main"><b>${escHtml(d.person)}</b>
-      <span class="muted">${isHutang ? "Saya berhutang" : "Menghutangi"} • Mulai ${fmtDate(d.start_date)}${d.due_date ? " • Tenggat " + fmtDate(d.due_date) : " • Tanpa tenggat"}${d.input_by ? " • 👤 " + escHtml(d.input_by) : ""}${d.note ? " • " + escHtml(d.note) : ""}</span>
-      <span class="debt-badge ${st.cls}">${st.label}</span>
+      <span class="muted">${isHutang ? "Saya berhutang" : "Menghutangi"} • Mulai ${fmtDate(d.start_date)}${d.due_date ? " • Tenggat " + fmtDate(d.due_date) : " • Tanpa tenggat"}${d.input_by ? " • 👤 " + escHtml(d.input_by) : ""}${d.note ? " • " + escHtml(d.note) : ""}</span>      <span class="debt-badge ${st.cls}">${st.label}</span>
     </div>
     <div class="tx-amt">${fmtIDR(d.amount)}</div>
     <div class="tx-act">
@@ -786,6 +827,7 @@ function startEditDebt(id) {
     inpSel.appendChild(opt);
   }
   if (d.input_by) inpSel.value = d.input_by;
+  $("#debt-owner").value = d.owner || "kita";
   $("#debt-submit").textContent = "Simpan Perubahan";
   window.scrollTo(0, document.body.scrollHeight);
 }
@@ -809,6 +851,7 @@ $("#debt-form").addEventListener("submit", async (e) => {
       due_date: $("#debt-due").value || "",
       note: $("#debt-note").value.trim(),
       input_by: $("#debt-inputter").value || "",
+      owner: $("#debt-owner").value || state.owner,
     };
     if (state.editingDebtId) {
       await api("/api/debts/" + state.editingDebtId, {
@@ -1108,7 +1151,7 @@ $("#bulk-submit").addEventListener("click", async () => {
     const r = await api("/api/transactions/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: payload, input_by }),
+      body: JSON.stringify({ items: payload, input_by, owner: $("#bulk-owner").value || state.owner }),
     });
     const nPhoto = uploaded.filter((x) => x.receipt_key).length;
     toast(
@@ -1178,6 +1221,7 @@ function resetForm() {
   $("#tx-cancel").hidden = true;
   $("#tx-form").reset();
   $("#tx-date").value = todayStr();
+  $("#tx-owner").value = state.owner;
   $("#tx-preview-wrap").hidden = true;
   $("#tx-preview").src = "";
   setFormType("out");
@@ -1200,6 +1244,7 @@ function startEdit(id) {
     inpSel.appendChild(opt);
   }
   if (t.input_by) inpSel.value = t.input_by;
+  $("#tx-owner").value = t.owner || "kita";
   // Preview struk yang sudah ada (kalau ada)
   state.removeReceipt = false;
   if (t.receipt_key) {
@@ -1267,6 +1312,7 @@ $("#tx-form").addEventListener("submit", async (e) => {
       amount,
       note: $("#tx-note").value.trim(),
       input_by: $("#tx-inputter").value || "",
+      owner: $("#tx-owner").value || state.owner,
     };
     let receipt_key = "";
     let notified = false;

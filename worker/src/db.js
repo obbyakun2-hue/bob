@@ -63,6 +63,22 @@ export async function initDb(db) {
     await db.exec("ALTER TABLE transactions ADD COLUMN input_by TEXT NOT NULL DEFAULT ''");
   }
 
+  // Migrasi: kolom owner (bobby/killa/kita) — pemisahan keuangan per orang.
+  // Data lama ditebak dari input_by: "Bobby"→bobby, "Killa"→killa, sisanya→kita.
+  const hasOwner = (cols.results || []).some((c) => c.name === "owner");
+  if (!hasOwner) {
+    await db.exec("ALTER TABLE transactions ADD COLUMN owner TEXT NOT NULL DEFAULT 'kita'");
+    await db.exec("UPDATE transactions SET owner = 'bobby' WHERE LOWER(TRIM(input_by)) = 'bobby'");
+    await db.exec("UPDATE transactions SET owner = 'killa' WHERE LOWER(TRIM(input_by)) = 'killa'");
+  }
+  const dCols = await db.prepare("PRAGMA table_info(debts)").all();
+  const hasDebtOwner = (dCols.results || []).some((c) => c.name === "owner");
+  if (!hasDebtOwner) {
+    await db.exec("ALTER TABLE debts ADD COLUMN owner TEXT NOT NULL DEFAULT 'kita'");
+    await db.exec("UPDATE debts SET owner = 'bobby' WHERE LOWER(TRIM(input_by)) = 'bobby'");
+    await db.exec("UPDATE debts SET owner = 'killa' WHERE LOWER(TRIM(input_by)) = 'killa'");
+  }
+
   // Seed penginput default — idempoten seperti kategori.
   const ipPlaceholders = DEFAULT_INPUTTERS.map(() => "(?)").join(", ");
   await db

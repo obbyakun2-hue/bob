@@ -7,6 +7,9 @@ import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTeleg
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Pemilik data: keuangan Bobby, Killa, atau bersama (Kita) — dipisah per menu.
+const OWNERS = ["bobby", "killa", "kita"];
+const validOwner = (v) => (OWNERS.includes(v) ? v : "kita");
 
 // ---- Rate limit login (anti brute-force): maks 10 percobaan / 5 menit / IP ----
 // Disimpan di KV supaya berlaku lintas isolate. Gagal-terbuka (fail open)
@@ -286,6 +289,7 @@ export default {
           const type = url.searchParams.get("type");
           const category = url.searchParams.get("category");
           const input_by = url.searchParams.get("input_by");
+          const ownerParam = url.searchParams.get("owner");
           const q = url.searchParams.get("q");
           const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 500);
           const offset = parseInt(url.searchParams.get("offset") || "0", 10) || 0;
@@ -296,6 +300,7 @@ export default {
           if (type === "in" || type === "out") { conds.push("type = ?"); params.push(type); }
           if (category) { conds.push("category = ?"); params.push(category); }
           if (input_by) { conds.push("input_by = ?"); params.push(input_by); }
+          if (OWNERS.includes(ownerParam)) { conds.push("owner = ?"); params.push(ownerParam); }
           if (q) { conds.push("note LIKE ?"); params.push(`%${q}%`); }
           const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
           const { results } = await env.DB.prepare(
@@ -316,16 +321,17 @@ export default {
           const note = String(b.note || "").slice(0, 500);
           const receipt_key = String(b.receipt_key || "").slice(0, 200);
           const input_by = String(b.input_by || "").trim().slice(0, 40);
+          const owner = validOwner(b.owner);
           if (!DATE_RE.test(date)) return json({ error: "Tanggal tidak valid (YYYY-MM-DD)" }, 400);
           if (amount <= 0) return json({ error: "Nominal harus lebih dari 0" }, 400);
           const tx = {
             id: crypto.randomUUID(),
-            date, type, category, amount, note, receipt_key, input_by,
+            date, type, category, amount, note, receipt_key, input_by, owner,
             created_at: new Date().toISOString(),
           };
           await env.DB.prepare(
-            "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-          ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.input_by, tx.created_at).run();
+            "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.input_by, tx.owner, tx.created_at).run();
 
           // Notif Telegram — dilewati bila upload tadi sudah mengirim foto+caption
           // notifikasi sekali jalan (receipt via Telegram selalu begitu).
@@ -380,6 +386,7 @@ export default {
         if (!items.length) return json({ error: "Tidak ada data" }, 400);
         if (items.length > 50) return json({ error: "Maksimal 50 transaksi sekaligus" }, 400);
         const input_by = String(b.input_by || "").trim().slice(0, 40);
+        const batchOwner = validOwner(b.owner);
         const txs = [];
         const recapTxs = [];
         for (const it of items) {
@@ -398,16 +405,17 @@ export default {
             date, type, category, amount, note,
             receipt_key,
             input_by,
+            owner: it.owner !== undefined ? validOwner(it.owner) : batchOwner,
             created_at: new Date().toISOString(),
           };
           txs.push(tx);
           if (!notified) recapTxs.push(tx);
         }
         const stmt = env.DB.prepare(
-          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         await env.DB.batch(
-          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.created_at))
+          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.owner, t.created_at))
         );
         // Rekap teks hanya untuk baris yang belum ternotifikasi via foto (anti dobel)
         if (recapTxs.length) ctx.waitUntil(notifyBatch(env, recapTxs, input_by));
@@ -449,6 +457,10 @@ export default {
             fields.push("input_by = ?");
             params.push(String(b.input_by).trim().slice(0, 40));
           }
+          if (b.owner !== undefined && OWNERS.includes(b.owner)) {
+            fields.push("owner = ?");
+            params.push(b.owner);
+          }
           if (!fields.length) return json({ error: "Tidak ada perubahan" }, 400);
           params.push(id);
           await env.DB.prepare(`UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`)
@@ -484,9 +496,11 @@ export default {
 
         if (request.method === "GET") {
           const status = url.searchParams.get("status");
+          const ownerParam = url.searchParams.get("owner");
           const conds = [];
           const params = [];
           if (status === "belum" || status === "lunas") { conds.push("status = ?"); params.push(status); }
+          if (OWNERS.includes(ownerParam)) { conds.push("owner = ?"); params.push(ownerParam); }
           const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
           const { results } = await env.DB.prepare(
             `SELECT * FROM debts ${where} ORDER BY status ASC, due_date ASC, created_at DESC`
@@ -503,17 +517,18 @@ export default {
           const due_date = String(b.due_date || "").slice(0, 10);
           const note = String(b.note || "").slice(0, 500);
           const input_by = String(b.input_by || "").trim().slice(0, 40);
+          const owner = validOwner(b.owner);
           if (!person) return json({ error: "Nama orang harus diisi" }, 400);
           if (amount <= 0) return json({ error: "Nominal harus lebih dari 0" }, 400);
           if (!DATE_RE.test(start_date)) return json({ error: "Tanggal mulai tidak valid" }, 400);
           if (due_date && !DATE_RE.test(due_date)) return json({ error: "Tenggat tidak valid" }, 400);
           const debt = {
             id: crypto.randomUUID(), type, person, amount, start_date, due_date,
-            note, status: "belum", input_by, created_at: new Date().toISOString(),
+            note, status: "belum", input_by, owner, created_at: new Date().toISOString(),
           };
           await env.DB.prepare(
-            "INSERT INTO debts (id, type, person, amount, start_date, due_date, note, status, input_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-          ).bind(debt.id, debt.type, debt.person, debt.amount, debt.start_date, debt.due_date, debt.note, debt.status, debt.input_by, debt.created_at).run();
+            "INSERT INTO debts (id, type, person, amount, start_date, due_date, note, status, input_by, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(debt.id, debt.type, debt.person, debt.amount, debt.start_date, debt.due_date, debt.note, debt.status, debt.input_by, debt.owner, debt.created_at).run();
           ctx.waitUntil(notifyDebt(env, debt));
           return json({ debt, telegram: !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) }, 201);
         }
@@ -553,6 +568,7 @@ export default {
           }
           if (b.status === "lunas" || b.status === "belum") { fields.push("status = ?"); params.push(b.status); }
           if (b.input_by !== undefined) { fields.push("input_by = ?"); params.push(String(b.input_by).trim().slice(0, 40)); }
+          if (b.owner !== undefined && OWNERS.includes(b.owner)) { fields.push("owner = ?"); params.push(b.owner); }
           if (!fields.length) return json({ error: "Tidak ada perubahan" }, 400);
           params.push(id);
           await env.DB.prepare(`UPDATE debts SET ${fields.join(", ")} WHERE id = ?`).bind(...params).run();
@@ -643,10 +659,13 @@ export default {
         const daysInMonth = new Date(y, mo, 0).getDate();
         const start = `${month}-01`;
         const end = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+        const ownerParam = url.searchParams.get("owner");
+        const ownerCond = OWNERS.includes(ownerParam) ? " AND owner = ?" : "";
+        const ownerBind = OWNERS.includes(ownerParam) ? [ownerParam] : [];
 
         const totals = await env.DB.prepare(
-          "SELECT type, SUM(amount) AS total FROM transactions WHERE date BETWEEN ? AND ? GROUP BY type"
-        ).bind(start, end).all();
+          `SELECT type, SUM(amount) AS total FROM transactions WHERE date BETWEEN ? AND ?${ownerCond} GROUP BY type`
+        ).bind(start, end, ...ownerBind).all();
         let totalIn = 0, totalOut = 0;
         for (const r of totals.results || []) {
           if (r.type === "in") totalIn = r.total || 0;
@@ -654,12 +673,12 @@ export default {
         }
 
         const byCat = await env.DB.prepare(
-          "SELECT category, type, SUM(amount) AS total, COUNT(*) AS n FROM transactions WHERE date BETWEEN ? AND ? GROUP BY category, type ORDER BY total DESC"
-        ).bind(start, end).all();
+          `SELECT category, type, SUM(amount) AS total, COUNT(*) AS n FROM transactions WHERE date BETWEEN ? AND ?${ownerCond} GROUP BY category, type ORDER BY total DESC`
+        ).bind(start, end, ...ownerBind).all();
 
         const perDay = await env.DB.prepare(
-          "SELECT date, type, SUM(amount) AS total FROM transactions WHERE date BETWEEN ? AND ? GROUP BY date, type"
-        ).bind(start, end).all();
+          `SELECT date, type, SUM(amount) AS total FROM transactions WHERE date BETWEEN ? AND ?${ownerCond} GROUP BY date, type`
+        ).bind(start, end, ...ownerBind).all();
         const map = {};
         for (const r of perDay.results || []) {
           (map[r.date] ||= { in: 0, out: 0 })[r.type] = r.total || 0;
