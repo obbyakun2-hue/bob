@@ -368,6 +368,7 @@ document.querySelectorAll(".nav-btn").forEach((b) =>
 function switchTab(name) {
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => (t.hidden = t.id !== "tab-" + name));
+  document.querySelector(".content").dataset.tab = name;
   if (name === "dashboard") loadDashboard().catch((e) => toast(e.message, false));
   if (name === "transaksi") loadTx().catch((e) => toast(e.message, false));
   if (name === "hutang") loadDebts().catch((e) => toast(e.message, false));
@@ -387,8 +388,16 @@ function switchMenu(name) {
 document.querySelectorAll(".side-btn").forEach((b) =>
   b.addEventListener("click", () => switchMenu(b.dataset.menu))
 );
-// Klik "Management" selalu membuka Overview Management (bukan dashboard pemilik)
-document.querySelector('.side-btn[data-menu="management"]').addEventListener("click", () => switchTab("overview"));
+// Klik "Management": buka Overview + lipat/buka submenu pemilik (▾)
+document.querySelector('.side-btn[data-menu="management"]').addEventListener("click", () => {
+  const nav = document.querySelector(".side-nav");
+  nav.classList.toggle("sub-closed");
+  localStorage.setItem("uang_submenu", nav.classList.contains("sub-closed") ? "closed" : "open");
+  switchTab("overview");
+});
+if (localStorage.getItem("uang_submenu") === "closed") {
+  document.querySelector(".side-nav").classList.add("sub-closed");
+}
 
 // ---------------- overview management ----------------
 const MOTIVASI = [
@@ -1530,16 +1539,6 @@ $("#tx-form").addEventListener("submit", async (e) => {
   btn.textContent = btnLabel;
   btn.disabled = false;
 });
-
-// Buka / tutup sidebar (☰) — pilihan diingat
-function applySidebar() {
-  $("#app-view").classList.toggle("sidebar-closed", localStorage.getItem("uang_sidebar") === "closed");
-}
-$("#sidebar-btn").addEventListener("click", () => {
-  const closed = $("#app-view").classList.toggle("sidebar-closed");
-  localStorage.setItem("uang_sidebar", closed ? "closed" : "open");
-});
-applySidebar();
 
 // ---------------- init ----------------
 initTheme();
