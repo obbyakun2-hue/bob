@@ -110,6 +110,7 @@ body::before {
 #app-view:not([hidden]) { display: flex; align-items: stretch; }
 
 /* Sidebar menu kiri: Management & Dokumen */
+#app-view.sidebar-closed .sidebar { display: none; }
 .sidebar {
   width: 232px; flex-shrink: 0;
   position: sticky; top: 0; height: 100vh;

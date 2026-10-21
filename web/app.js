@@ -32,8 +32,11 @@ const INPUTTER_BY_OWNER = { bobby: "Bobby", killa: "Killa", kita: "kita" };
 const ownerInputter = () => INPUTTER_BY_OWNER[state.owner] || "kita";
 
 function syncOwnerUI() {
+  // Di Overview Management tidak ada pemilik yang aktif — tombol pemilik
+  // baru menyala setelah menunya diklik / dashboardnya dibuka.
+  const onOverview = !$("#tab-overview").hidden;
   document.querySelectorAll(".owner-btn").forEach((b) =>
-    b.classList.toggle("active", b.dataset.owner === state.owner)
+    b.classList.toggle("active", !onOverview && b.dataset.owner === state.owner)
   );
 }
 
@@ -369,6 +372,7 @@ function switchTab(name) {
   if (name === "transaksi") loadTx().catch((e) => toast(e.message, false));
   if (name === "hutang") loadDebts().catch((e) => toast(e.message, false));
   if (name === "overview") loadOverview().catch((e) => toast(e.message, false));
+  syncOwnerUI();
 }
 
 // ---------------- menu sidebar: Management vs Dokumen ----------------
@@ -1526,6 +1530,16 @@ $("#tx-form").addEventListener("submit", async (e) => {
   btn.textContent = btnLabel;
   btn.disabled = false;
 });
+
+// Buka / tutup sidebar (☰) — pilihan diingat
+function applySidebar() {
+  $("#app-view").classList.toggle("sidebar-closed", localStorage.getItem("uang_sidebar") === "closed");
+}
+$("#sidebar-btn").addEventListener("click", () => {
+  const closed = $("#app-view").classList.toggle("sidebar-closed");
+  localStorage.setItem("uang_sidebar", closed ? "closed" : "open");
+});
+applySidebar();
 
 // ---------------- init ----------------
 initTheme();
