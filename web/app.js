@@ -219,6 +219,7 @@ function showTxDetail(id) {
   $("#txd-amt").textContent = (t.type === "in" ? "+" : "-") + fmtIDR(t.amount);
   $("#txd-type").textContent = t.type === "in" ? "💰 Pemasukan" : "💸 Pengeluaran";
   $("#txd-owner").textContent = `${ownerIcon(t.owner)} ${ownerLabel(t.owner)}`;
+  $("#txd-payment").textContent = t.payment ? `💳 ${t.payment}` : "—";
   $("#txd-by").textContent = t.input_by || "—";
   $("#txd-note").textContent = t.note || "—";
   const rrow = $("#txd-receipt-row");
@@ -873,9 +874,9 @@ $("#f-export").addEventListener("click", async () => {
       if (all.length >= total || transactions.length < LIM) break;
       offset += LIM;
     }
-    const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Kepunyaan", "Diinput oleh", "Catatan"]];
+    const rows = [["Tanggal", "Tipe", "Kategori", "Nominal", "Kepunyaan", "Pembayaran", "Diinput oleh", "Catatan"]];
     for (const t of all)
-      rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, ownerLabel(t.owner), t.input_by || "", t.note || ""]);
+      rows.push([t.date, t.type === "in" ? "Masuk" : "Keluar", t.category, t.amount, ownerLabel(t.owner), t.payment || "", t.input_by || "", t.note || ""]);
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
@@ -1330,29 +1331,58 @@ $("#bulk-rows").addEventListener("click", (e) => {
 });
 
 // ---------------- scan struk di borongan ----------------
-// Tiap struk hasil scan menjadi 1 baris (foto aslinya ikut terlampir).
-function fillBulkRowFromScan(r, file) {
-  let row = [...document.querySelectorAll(".bulk-row")].find(
+// Struk belanjaan dipecah PER ITEM: tiap barang jadi 1 baris sendiri
+// (foto struk terlampir di baris pertama). Struk tanpa rincian (mis.
+// struk parkir/ATM) jatuh ke mode lama: 1 baris sebesar totalnya.
+function obtainBulkRow() {
+  const row = [...document.querySelectorAll(".bulk-row")].find(
     (el) => !el.querySelector(".b-amount").value && !el.querySelector(".b-note").value.trim()
   );
-  if (!row) {
-    addBulkRow();
-    row = $("#bulk-rows").lastElementChild;
-  }
+  if (row) return row;
+  addBulkRow();
+  return $("#bulk-rows").lastElementChild;
+}
+function fillOneBulkRow(row, { date, category, amount, note, payment, file }) {
   const typeSel = row.querySelector(".b-type");
   typeSel.value = "out";
   typeSel.dispatchEvent(new Event("change")); // isi ulang opsi kategori (keluar)
-  if (r.date) row.querySelector(".b-date").value = r.date;
-  if (r.category) row.querySelector(".b-cat").value = r.category;
-  if (r.amount) row.querySelector(".b-amount").value = Number(r.amount).toLocaleString("id-ID");
-  if (r.merchant) row.querySelector(".b-note").value = r.merchant;
-  try {
-    const fi = row.querySelector(".b-file");
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    fi.files = dt.files;
-    fi.dispatchEvent(new Event("change"));
-  } catch { /* foto gagal terlampir — data scan tetap terisi */ }
+  if (date) row.querySelector(".b-date").value = date;
+  if (category) row.querySelector(".b-cat").value = category;
+  if (amount) row.querySelector(".b-amount").value = Number(amount).toLocaleString("id-ID");
+  if (note) row.querySelector(".b-note").value = note;
+  if (payment) row.dataset.payment = payment;
+  if (file) {
+    try {
+      const fi = row.querySelector(".b-file");
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fi.files = dt.files;
+      fi.dispatchEvent(new Event("change"));
+    } catch { /* foto gagal terlampir — data scan tetap terisi */ }
+  }
+}
+function fillBulkRowFromScan(r, file) {
+  if (r.items && r.items.length) {
+    r.items.forEach((it, idx) => {
+      fillOneBulkRow(obtainBulkRow(), {
+        date: r.date,
+        category: r.category,
+        amount: it.price,
+        note: it.qty > 1 ? `${it.name} x${it.qty}` : it.name,
+        payment: r.payment,
+        file: idx === 0 ? file : null,
+      });
+    });
+  } else {
+    fillOneBulkRow(obtainBulkRow(), {
+      date: r.date,
+      category: r.category,
+      amount: r.amount,
+      note: r.merchant,
+      payment: r.payment,
+      file,
+    });
+  }
 }
 $("#bulk-scan").addEventListener("click", () => $("#bulk-scan-file").click());
 $("#bulk-scan-file").addEventListener("change", async (e) => {
@@ -1396,6 +1426,7 @@ $("#bulk-submit").addEventListener("click", async () => {
       category: row.querySelector(".b-cat").value,
       amount,
       note: row.querySelector(".b-note").value.trim(),
+      payment: row.dataset.payment || $("#bulk-payment").value,
       file: row.querySelector(".b-file").files[0] || null,
     });
   }
@@ -1541,6 +1572,7 @@ async function scanReceipt(file) {
     if (r.amount) $("#tx-amount").value = Number(r.amount).toLocaleString("id-ID");
     if (r.date) $("#tx-date").value = r.date;
     if (r.category) $("#tx-category").value = r.category;
+    if (r.payment) $("#tx-payment").value = r.payment;
     if (r.merchant && !$("#tx-note").value.trim()) $("#tx-note").value = r.merchant;
     toast(`🧾 Terbaca: ${fmtIDR(r.amount)}${r.merchant ? " • " + r.merchant : ""}${r.category ? " • " + r.category : ""} — cek lagi sebelum simpan ya`);
   } catch (e) {
@@ -1588,6 +1620,7 @@ function startEdit(id) {
   $("#tx-category").value = t.category;
   $("#tx-amount").value = Number(t.amount).toLocaleString("id-ID");
   $("#tx-note").value = t.note || "";
+  $("#tx-payment").value = t.payment || "Cash";
   // Preview struk yang sudah ada (kalau ada)
   state.removeReceipt = false;
   if (t.receipt_key) {
@@ -1654,6 +1687,7 @@ $("#tx-form").addEventListener("submit", async (e) => {
       category: $("#tx-category").value,
       amount,
       note: $("#tx-note").value.trim(),
+      payment: $("#tx-payment").value,
       input_by: ownerInputter(),
       owner: state.owner,
     };

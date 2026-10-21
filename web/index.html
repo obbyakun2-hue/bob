@@ -208,6 +208,11 @@
 
       <div id="bulk-wrap" class="card" hidden>
         <div class="card-title"><h3>Tambah Borongan</h3><span class="muted">Banyak transaksi sekaligus, 1 rekap Telegram</span></div>
+        <label class="bulk-pay">💳 Pembayaran (baris manual)
+          <select id="bulk-payment">
+            <option>Cash</option><option>QRIS</option><option>ShopeePay</option><option>GoPay</option><option>OVO</option><option>DANA</option><option>Transfer Bank</option><option>Kartu Debit</option><option>Kartu Kredit</option><option>Lainnya</option>
+          </select>
+        </label>
         <div id="bulk-rows"></div>
         <div class="row">
           <button type="button" id="bulk-add" class="btn">＋ Tambah baris</button>
@@ -229,6 +234,11 @@
           <label>Tanggal<input type="date" id="tx-date" required /></label>
           <label>Kategori<select id="tx-category"></select></label>
         </div>
+        <label>Pembayaran
+          <select id="tx-payment">
+            <option>Cash</option><option>QRIS</option><option>ShopeePay</option><option>GoPay</option><option>OVO</option><option>DANA</option><option>Transfer Bank</option><option>Kartu Debit</option><option>Kartu Kredit</option><option>Lainnya</option>
+          </select>
+        </label>
         <label>Nominal (Rp)<input id="tx-amount" inputmode="numeric" placeholder="0" required /></label>
         <label>Catatan<textarea id="tx-note" rows="3" placeholder="cth: makan siang"></textarea></label>
         <label>Foto struk <em class="hint">(opsional, otomatis dikompres ke WebP)</em><input type="file" id="tx-file" accept="image/*" /></label>
@@ -375,6 +385,7 @@
     <div class="txd-rows">
       <div><span class="muted">Tipe</span><b id="txd-type"></b></div>
       <div><span class="muted">Kepunyaan</span><b id="txd-owner"></b></div>
+      <div><span class="muted">Pembayaran</span><b id="txd-payment"></b></div>
       <div><span class="muted">Diinput oleh</span><b id="txd-by"></b></div>
       <div><span class="muted">Catatan</span><b id="txd-note"></b></div>
       <div id="txd-receipt-row"><span class="muted">Struk</span><img id="txd-receipt" class="tx-receipt-thumb" alt="struk" /></div>

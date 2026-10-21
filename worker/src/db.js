@@ -87,6 +87,12 @@ export async function initDb(db) {
     await db.exec("ALTER TABLE documents ADD COLUMN owner TEXT NOT NULL DEFAULT 'bobby'");
   }
 
+  // Migrasi: kolom payment (metode pembayaran) untuk transaksi.
+  const hasPayment = (cols.results || []).some((c) => c.name === "payment");
+  if (!hasPayment) {
+    await db.exec("ALTER TABLE transactions ADD COLUMN payment TEXT NOT NULL DEFAULT ''");
+  }
+
   // Seed penginput default — idempoten seperti kategori.
   const ipPlaceholders = DEFAULT_INPUTTERS.map(() => "(?)").join(", ");
   await db

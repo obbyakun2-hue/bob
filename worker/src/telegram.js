@@ -24,6 +24,7 @@ export function txMessage(tx) {
   ];
   if (tx.input_by) lines.push(`👤 Input oleh: ${escapeHtml(tx.input_by)}`);
   lines.push(`🏷️ Milik: ${ownerLabel(tx.owner)}`);
+  if (tx.payment) lines.push(`💳 Via: ${escapeHtml(tx.payment)}`);
   if (tx.note) lines.push(`Catatan : ${escapeHtml(tx.note)}`);
   return lines.join("\n");
 }

@@ -4,7 +4,7 @@
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
 import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram, notifyDebt, notifyDebtPaid, sendText, formatIDR } from "./telegram.js";
-import { buildScanPrompt, parseScanResult } from "./scan.js";
+import { buildScanPrompt, parseScanResult, matchPayment } from "./scan.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -494,16 +494,17 @@ async function handleRequest(request, env, ctx) {
           const receipt_key = String(b.receipt_key || "").slice(0, 200);
           const input_by = String(b.input_by || "").trim().slice(0, 40);
           const owner = validOwner(b.owner);
+          const payment = matchPayment(b.payment) || "";
           if (!DATE_RE.test(date)) return json({ error: "Tanggal tidak valid (YYYY-MM-DD)" }, 400);
           if (amount <= 0) return json({ error: "Nominal harus lebih dari 0" }, 400);
           const tx = {
             id: crypto.randomUUID(),
-            date, type, category, amount, note, receipt_key, input_by, owner,
+            date, type, category, amount, note, receipt_key, input_by, owner, payment,
             created_at: new Date().toISOString(),
           };
           await env.DB.prepare(
-            "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-          ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.input_by, tx.owner, tx.created_at).run();
+            "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, payment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(tx.id, tx.date, tx.type, tx.category, tx.amount, tx.note, tx.receipt_key, tx.input_by, tx.owner, tx.payment, tx.created_at).run();
 
           // Notif Telegram — dilewati bila upload tadi sudah mengirim foto+caption
           // notifikasi sekali jalan (receipt via Telegram selalu begitu).
@@ -578,16 +579,17 @@ async function handleRequest(request, env, ctx) {
             receipt_key,
             input_by,
             owner: it.owner !== undefined ? validOwner(it.owner) : batchOwner,
+            payment: matchPayment(it.payment) || "",
             created_at: new Date().toISOString(),
           };
           txs.push(tx);
           if (!notified) recapTxs.push(tx);
         }
         const stmt = env.DB.prepare(
-          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, payment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         await env.DB.batch(
-          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.owner, t.created_at))
+          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.owner, t.payment, t.created_at))
         );
         // Rekap teks hanya untuk baris yang belum ternotifikasi via foto (anti dobel)
         if (recapTxs.length) ctx.waitUntil(notifyBatch(env, recapTxs, input_by));
@@ -632,6 +634,10 @@ async function handleRequest(request, env, ctx) {
           if (b.owner !== undefined && OWNERS.includes(b.owner)) {
             fields.push("owner = ?");
             params.push(b.owner);
+          }
+          if (b.payment !== undefined) {
+            fields.push("payment = ?");
+            params.push(matchPayment(b.payment) || "");
           }
           if (!fields.length) return json({ error: "Tidak ada perubahan" }, 400);
           params.push(id);
