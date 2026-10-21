@@ -304,6 +304,7 @@ $("#login-form").addEventListener("submit", async (e) => {
     localStorage.setItem("uang_token", d.token);
     $("#password").value = "";
     await showApp(true);
+    openProfiles();
     toast("Selamat datang! 👋");
   } catch (err) {
     toast(err.message, false);
@@ -312,9 +313,32 @@ $("#login-form").addEventListener("submit", async (e) => {
   btn.disabled = false;
 });
 $("#logout-btn").addEventListener("click", () => {
+  closeProfiles();
   logout();
   toast("Kamu sudah keluar");
 });
+
+// ---------------- layar pilih profil (ala Netflix) ----------------
+function openProfiles() {
+  $("#profile-screen").hidden = false;
+}
+function closeProfiles() {
+  $("#profile-screen").hidden = true;
+}
+document.querySelectorAll("[data-pf]").forEach((t) =>
+  t.addEventListener("click", () => {
+    closeProfiles();
+    switchMenu("management");
+    setOwner(t.dataset.pf);
+  })
+);
+$("#pf-overview").addEventListener("click", () => {
+  closeProfiles();
+  switchMenu("management");
+  switchTab("overview");
+});
+$("#pf-close").addEventListener("click", closeProfiles);
+$("#profiles-btn").addEventListener("click", openProfiles);
 $("#theme-btn").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
@@ -487,7 +511,7 @@ async function loadOverview() {
       const p = s.totalIn > 0 ? Math.min(100, Math.round((s.totalOut / s.totalIn) * 100)) : s.totalOut > 0 ? 100 : 0;
       return `
       <button class="card ov-card" data-ov-owner="${o}">
-        <div class="ov-card-head"><span class="ov-ava">${ownerIcon(o)}</span><b>${ownerLabel(o)}</b><span class="ov-go">Buka →</span></div>
+        <div class="ov-card-head"><img class="ov-ava-img" src="avatars/${o}.png" alt="" /><b>${ownerLabel(o)}</b><span class="ov-go">Buka →</span></div>
         <div class="ov-card-bal${s.balance < 0 ? " neg" : ""}">${fmtIDR(s.balance)}</div>
         <div class="ov-card-row"><span>💰 Masuk <b>${fmtIDR(s.totalIn)}</b></span><span>💸 Keluar <b>${fmtIDR(s.totalOut)}</b></span></div>
         <div class="hero-bar ov-bar"><i style="width:${p}%"></i></div>

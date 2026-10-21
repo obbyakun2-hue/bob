@@ -51,6 +51,7 @@
       </div>
     </nav>
     <button id="install-btn" class="side-btn" hidden><span class="side-ico">📲</span><span class="side-label">Instal Aplikasi</span></button>
+    <button id="profiles-btn" class="side-btn"><span class="side-ico">👥</span><span class="side-label">Ganti Profil</span></button>
   </aside>
 
   <div class="content" data-menu="management">
@@ -386,6 +387,22 @@
 </div>
 
 <!-- DETAIL TRANSAKSI -->
+<div id="profile-screen" hidden>
+  <div class="pf-top">
+    <span class="pf-logo">💚 KIBY</span>
+    <button id="pf-close" class="pf-x" title="Tutup">✕</button>
+  </div>
+  <div class="pf-center">
+    <h1 class="pf-title">Mau masuk sebagai siapa?</h1>
+    <div class="pf-tiles">
+      <button class="pf-tile" data-pf="bobby" style="--d:0.05s"><img src="avatars/bobby.png" alt="Avatar Bobby" /><span>Bobby</span></button>
+      <button class="pf-tile" data-pf="killa" style="--d:0.15s"><img src="avatars/killa.png" alt="Avatar Killa" /><span>Killa</span></button>
+      <button class="pf-tile" data-pf="kita" style="--d:0.25s"><img src="avatars/kita.png" alt="Avatar Kita" /><span>Kita</span></button>
+    </div>
+    <button id="pf-overview" class="pf-overview-btn">👀 Lihat gabungan semua</button>
+  </div>
+</div>
+
 <div id="struk-modal" class="lightbox" hidden>
   <div class="lightbox-backdrop" id="struk-backdrop"></div>
   <div class="lightbox-box struk-paper">

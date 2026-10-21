@@ -515,6 +515,55 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .struk-foot { text-align: center; margin-top: 8px; }
 .struk-paper .btn { font-family: inherit; }
 
+/* ---------- Layar pilih profil (ala Netflix) ---------- */
+#profile-screen {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; flex-direction: column;
+  background:
+    radial-gradient(60rem 30rem at 15% -10%, rgba(34, 197, 94, 0.22), transparent 60%),
+    radial-gradient(50rem 26rem at 90% 110%, rgba(236, 72, 153, 0.16), transparent 60%),
+    linear-gradient(160deg, #0a0e17, #101827 55%, #0a0e17);
+  color: #f9fafb; overflow-y: auto;
+}
+#profile-screen[hidden] { display: none; }
+.pf-top { display: flex; justify-content: space-between; align-items: center; padding: 20px 26px; }
+.pf-logo { font-weight: 900; font-size: 1.35em; letter-spacing: 0.14em; color: #4ade80; }
+.pf-x {
+  background: transparent; border: none; color: #9ca3af; font-size: 1.25em;
+  cursor: pointer; padding: 6px 10px; margin: 0; border-radius: 10px;
+}
+.pf-x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.pf-center { margin: auto; text-align: center; padding: 10px 18px 48px; }
+.pf-title { font-size: clamp(1.6rem, 5vw, 2.7rem); font-weight: 600; margin: 0 0 38px; animation: pfUp 0.5s ease both; }
+.pf-tiles { display: flex; gap: clamp(16px, 4vw, 44px); justify-content: center; flex-wrap: wrap; }
+.pf-tile {
+  background: none; border: none; cursor: pointer; padding: 0; margin: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  font-family: inherit; animation: pfUp 0.55s ease both; animation-delay: var(--d, 0s);
+}
+.pf-tile img {
+  width: clamp(100px, 24vw, 168px); height: clamp(100px, 24vw, 168px);
+  border-radius: 14px; border: 3px solid transparent; object-fit: cover;
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+.pf-tile span { color: #9ca3af; font-size: clamp(1em, 2.6vw, 1.2em); transition: color 0.18s; }
+.pf-tile:hover img, .pf-tile:focus-visible img {
+  transform: scale(1.06); border-color: #e5e7eb;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+.pf-tile:hover span, .pf-tile:focus-visible span { color: #fff; }
+.pf-overview-btn {
+  margin-top: 44px; background: transparent; color: #d1d5db; cursor: pointer;
+  border: 1px solid #4b5563; padding: 11px 26px; border-radius: 8px;
+  font-family: inherit; font-size: 0.98em; letter-spacing: 0.06em; text-transform: uppercase;
+  transition: border-color 0.18s, color 0.18s; animation: pfUp 0.55s ease both; animation-delay: 0.35s;
+}
+.pf-overview-btn:hover { border-color: #fff; color: #fff; }
+@keyframes pfUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+/* Avatar kartun di kartu Overview */
+.ov-ava-img { width: 46px; height: 46px; border-radius: 12px; object-fit: cover; flex: none; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18); }
+
 .chart-wrap { position: relative; height: 270px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
 @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
