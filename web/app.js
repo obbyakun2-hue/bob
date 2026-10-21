@@ -353,6 +353,7 @@ async function showApp() {
   resetDocForm();
   switchMenu("management");
   switchTab("overview");
+  playGreeting();
 }
 
 // ---------------- tabs ----------------
@@ -1539,6 +1540,17 @@ $("#tx-form").addEventListener("submit", async (e) => {
   btn.textContent = btnLabel;
   btn.disabled = false;
 });
+
+// Sapaan suara saat masuk aplikasi (sekali per sesi). Kalau autoplay
+// ke-block browser (buka ulang tanpa klik), putar saat sentuhan pertama.
+function playGreeting() {
+  if (sessionStorage.getItem("uang_greeted")) return;
+  sessionStorage.setItem("uang_greeted", "1");
+  const audio = new Audio("sapaan.mp3");
+  audio.play().catch(() => {
+    window.addEventListener("pointerdown", () => audio.play().catch(() => {}), { once: true });
+  });
+}
 
 // ---------------- init ----------------
 initTheme();
