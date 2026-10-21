@@ -763,7 +763,7 @@ async function loadTx() {
         <span class="muted">${fmtDate(t.date)}${t.input_by ? " • 👤 " + escHtml(t.input_by) : ""}${t.note ? " • " + escHtml(t.note) : ""}</span>
       </div>
       <div class="tx-amt">${t.type === "in" ? "+" : "-"}${fmtIDR(t.amount)}</div>
-      ${t.receipt_key ? `<img class="tx-receipt-thumb" src="/api/receipt/${t.receipt_key}" alt="struk" loading="lazy" title="Tap untuk preview" />` : ""}
+      ${t.receipt_key ? `<img class="tx-receipt-thumb" src="/api/receipt/${escHtml(t.receipt_key)}" alt="struk" loading="lazy" title="Tap untuk preview" />` : ""}
       <div class="tx-act">
         <button class="btn sm" data-edit="${t.id}">Ubah</button>
         <button class="btn sm danger" data-del="${t.id}">Hapus</button>
@@ -1131,7 +1131,7 @@ function docRow(d) {
     <div class="tx-main"><b>${escHtml(d.title)}</b>
       <span class="muted">${d.category ? escHtml(d.category) + " • " : ""}${fmtDate(d.doc_date)}${d.note ? " • " + escHtml(d.note) : ""}</span>
     </div>
-    ${d.photo_key ? `<img class="tx-receipt-thumb doc-thumb" src="/api/receipt/${d.photo_key}" alt="foto dokumen" loading="lazy" title="Tap untuk preview" />` : ""}
+    ${d.photo_key ? `<img class="tx-receipt-thumb doc-thumb" src="/api/receipt/${escHtml(d.photo_key)}" alt="foto dokumen" loading="lazy" title="Tap untuk preview" />` : ""}
     <div class="tx-act">
       <button class="btn sm danger" data-doc-del="${d.id}">Hapus</button>
     </div>

@@ -97,12 +97,50 @@ async function runDueReminders(env, dryRun = false) {
   return { today, sent };
 }
 
+// ---------------- security headers ----------------
+// Ditempel ke SEMUA respons (API + aset statis): anti-clickjacking/
+// deface-embed (frame-ancestors), anti-MIME-sniffing, CSP ketat yang
+// hanya mengizinkan sumber daya aplikasi sendiri + CDN Chart.js/Fonts.
+const SECURITY_HEADERS = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+function withSecurityHeaders(res) {
+  const h = new Headers(res.headers);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) h.set(k, v);
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
+}
+
+// Bandingkan secret secara constant-time (untuk endpoint init/reminders).
+async function secretEq(a, b) {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(String(a ?? ""))),
+    crypto.subtle.digest("SHA-256", enc.encode(String(b ?? ""))),
+  ]);
+  const va = new Uint8Array(ha), vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runDueReminders(env).catch((e) => console.log("reminder error:", e?.message || e)));
   },
 
   async fetch(request, env, ctx) {
+    return withSecurityHeaders(await handleRequest(request, env, ctx));
+  },
+};
+
+async function handleRequest(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -116,7 +154,7 @@ export default {
       // ---------- pengingat hutang: jalankan manual (dry=1 untuk cek) ----------
       if (path.startsWith("/api/reminders/run/")) {
         const secret = decodeURIComponent(path.slice("/api/reminders/run/".length));
-        if (!env.JWT_SECRET || secret !== env.JWT_SECRET) {
+        if (!env.JWT_SECRET || !(await secretEq(secret, env.JWT_SECRET))) {
           return json({ error: "forbidden" }, 403);
         }
         return json(await runDueReminders(env, url.searchParams.get("dry") === "1"));
@@ -124,7 +162,7 @@ export default {
 
       if (path.startsWith("/api/init/")) {
         const secret = decodeURIComponent(path.slice("/api/init/".length));
-        if (!env.JWT_SECRET || secret !== env.JWT_SECRET) {
+        if (!env.JWT_SECRET || !(await secretEq(secret, env.JWT_SECRET))) {
           return json({ error: "forbidden" }, 403);
         }
         try {
@@ -322,9 +360,13 @@ export default {
             type: "arrayBuffer",
           });
           if (!value) return json({ error: "not found" }, 404);
+          // Content-Type TIDAK dipercaya dari metadata upload — turunkan
+          // dari ekstensi key agar file tak bisa disajikan sebagai HTML.
+          const ext = (mKv[1].split(".").pop() || "").toLowerCase();
+          const ctMap = { webp: "image/webp", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif" };
           return new Response(value, {
             headers: {
-              "Content-Type": metadata?.contentType || "image/webp",
+              "Content-Type": ctMap[ext] || "image/webp",
               "Cache-Control": "private, max-age=31536000",
             },
           });
@@ -764,5 +806,4 @@ export default {
       console.log("worker error:", e?.stack || e?.message || e);
       return json({ error: "Terjadi kesalahan server" }, 500);
     }
-  },
-};
+}
