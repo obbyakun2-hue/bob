@@ -4,6 +4,7 @@
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
 import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram, notifyDebt, notifyDebtPaid, sendText, formatIDR } from "./telegram.js";
+import { buildScanPrompt, parseScanResult } from "./scan.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -229,6 +230,39 @@ async function handleRequest(request, env, ctx) {
         const name = decodeURIComponent(mInp[1]).slice(0, 40);
         await env.DB.prepare("DELETE FROM inputters WHERE name = ?").bind(name).run();
         return json({ ok: true });
+      }
+
+      // ---------- scan struk (AI vision) ----------
+      // Foto struk -> {amount, date, merchant, category} untuk isi form
+      // otomatis. Hasilnya SELALU ditinjau user dulu sebelum disimpan.
+      if (path === "/api/scan-receipt" && request.method === "POST") {
+        if (!(await getAuthUser(request, env))) return unauthorized();
+        if (!env.AI) return json({ error: "Fitur scan belum aktif di server (AI belum terhubung)" }, 501);
+        const form = await request.formData().catch(() => null);
+        const file = form ? form.get("file") : null;
+        if (!file || typeof file === "string") return json({ error: "File tidak ditemukan" }, 400);
+        if (file.type && !file.type.startsWith("image/")) return json({ error: "File harus berupa gambar" }, 400);
+        if (file.size > 5 * 1024 * 1024) return json({ error: "Ukuran file maksimal 5MB" }, 400);
+        const { results: catRows } = await env.DB.prepare(
+          "SELECT name FROM categories WHERE type = 'out' ORDER BY name"
+        ).all();
+        const catNames = (catRows || []).map((c) => c.name);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let aiRes;
+        try {
+          aiRes = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+            prompt: buildScanPrompt(catNames),
+            image: [...bytes],
+            max_tokens: 512,
+          });
+        } catch (e) {
+          return json({ error: "AI gagal memproses foto — coba lagi atau isi manual" }, 502);
+        }
+        const parsed = parseScanResult(aiRes?.response || "", catNames);
+        if (!parsed) {
+          return json({ error: "Struk tidak terbaca jelas — coba foto lebih terang & lurus, atau isi manual" }, 422);
+        }
+        return json(parsed);
       }
 
       // ---------- upload struk ----------

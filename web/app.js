@@ -1416,9 +1416,47 @@ $("#tx-file").addEventListener("change", () => {
   if (f) {
     $("#tx-preview").src = URL.createObjectURL(f);
     $("#tx-preview-wrap").hidden = false;
+    if (state.scanAfterPick) {
+      state.scanAfterPick = false;
+      scanReceipt(f);
+    }
   } else {
     $("#tx-preview-wrap").hidden = true;
     $("#tx-preview").src = "";
+  }
+});
+
+// ---------------- scan struk (AI) ----------------
+// Foto struk -> nominal/tanggal/kategori terisi otomatis (user tetap
+// meninjau & menekan Simpan sendiri).
+async function scanReceipt(file) {
+  const btn = $("#tx-scan");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳ Memindai struk…";
+  try {
+    const fd = new FormData();
+    fd.append("file", await toUploadFile(file));
+    const r = await api("/api/scan-receipt", { method: "POST", body: fd });
+    setFormType("out"); // struk hampir selalu pengeluaran (sekalian isi ulang opsi kategori)
+    if (r.amount) $("#tx-amount").value = Number(r.amount).toLocaleString("id-ID");
+    if (r.date) $("#tx-date").value = r.date;
+    if (r.category) $("#tx-category").value = r.category;
+    if (r.merchant && !$("#tx-note").value.trim()) $("#tx-note").value = r.merchant;
+    toast(`🧾 Terbaca: ${fmtIDR(r.amount)}${r.merchant ? " • " + r.merchant : ""}${r.category ? " • " + r.category : ""} — cek lagi sebelum simpan ya`);
+  } catch (e) {
+    toast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+$("#tx-scan").addEventListener("click", () => {
+  const f = $("#tx-file").files[0];
+  if (f) scanReceipt(f);
+  else {
+    state.scanAfterPick = true;
+    $("#tx-file").click();
   }
 });
 $("#tx-preview").addEventListener("click", () => {

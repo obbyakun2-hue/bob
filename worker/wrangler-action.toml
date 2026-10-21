@@ -26,3 +26,7 @@ database_id = "${D1_DATABASE_ID}"
 [[kv_namespaces]]
 binding = "RECEIPTS"
 id = "${KV_NAMESPACE_ID}"
+
+# Workers AI — dipakai fitur scan struk (vision)
+[ai]
+binding = "AI"
