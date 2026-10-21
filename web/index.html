@@ -59,6 +59,41 @@
 
   <div id="view-management">
   <main>
+    <!-- OVERVIEW MANAGEMENT -->
+    <section id="tab-overview" class="tab" hidden>
+      <div class="dash-head">
+        <div>
+          <h2>Management</h2>
+          <p class="muted" id="ov-subtitle">Ringkasan semua keuangan</p>
+        </div>
+      </div>
+
+      <div class="card stat hero">
+        <div class="hero-top">
+          <span class="hero-label">💎 Total Saldo Gabungan Bulan Ini</span>
+          <span class="hero-chip">Bobby • Killa • Kita</span>
+        </div>
+        <div class="hero-balance" id="ov-balance">Rp0</div>
+        <div class="hero-row">
+          <div class="hero-mini"><span class="hero-mini-label">💰 Total Pemasukan</span><b id="ov-in">Rp0</b></div>
+          <div class="hero-mini"><span class="hero-mini-label">💸 Total Pengeluaran</span><b id="ov-out">Rp0</b></div>
+          <div class="hero-mini"><span class="hero-mini-label">🐷 Tingkat Menabung</span><b id="ov-rate">0%</b></div>
+        </div>
+        <div class="hero-bar"><i id="ov-bar"></i></div>
+        <p class="hero-note" id="ov-note">Memuat motivasi…</p>
+      </div>
+
+      <div class="ov-cards" id="ov-cards"></div>
+
+      <div class="card ov-quote">
+        <span class="ov-quote-ico">💡</span>
+        <div>
+          <p id="ov-quote-text">“…”</p>
+          <small class="muted" id="ov-quote-author"></small>
+        </div>
+      </div>
+    </section>
+
     <!-- DASHBOARD -->
     <section id="tab-dashboard" class="tab">
       <div class="dash-head">

@@ -49,7 +49,8 @@ function setOwner(o) {
   const activeTab = document.querySelector(".nav-btn.active")?.dataset.tab;
   if (activeTab === "transaksi") loadTx().catch((e) => toast(e.message, false));
   else if (activeTab === "hutang") loadDebts().catch((e) => toast(e.message, false));
-  else loadDashboard().catch((e) => toast(e.message, false));
+  else if (activeTab === "dashboard") loadDashboard().catch((e) => toast(e.message, false));
+  else switchTab("dashboard");
 }
 document.querySelectorAll(".owner-btn").forEach((b) =>
   b.addEventListener("click", () => {
@@ -348,7 +349,7 @@ async function showApp() {
   resetForm();
   resetDocForm();
   switchMenu("management");
-  switchTab("dashboard");
+  switchTab("overview");
 }
 
 // ---------------- tabs ----------------
@@ -367,6 +368,7 @@ function switchTab(name) {
   if (name === "dashboard") loadDashboard().catch((e) => toast(e.message, false));
   if (name === "transaksi") loadTx().catch((e) => toast(e.message, false));
   if (name === "hutang") loadDebts().catch((e) => toast(e.message, false));
+  if (name === "overview") loadOverview().catch((e) => toast(e.message, false));
 }
 
 // ---------------- menu sidebar: Management vs Dokumen ----------------
@@ -381,6 +383,72 @@ function switchMenu(name) {
 document.querySelectorAll(".side-btn").forEach((b) =>
   b.addEventListener("click", () => switchMenu(b.dataset.menu))
 );
+// Klik "Management" selalu membuka Overview Management (bukan dashboard pemilik)
+document.querySelector('.side-btn[data-menu="management"]').addEventListener("click", () => switchTab("overview"));
+
+// ---------------- overview management ----------------
+const MOTIVASI = [
+  { q: "Jangan menabung apa yang tersisa setelah belanja — belanjalah apa yang tersisa setelah menabung.", a: "Warren Buffett" },
+  { q: "Menabung bukan soal besar kecilnya uang, tapi soal konsistensi melakukannya.", a: "Pepatah keuangan" },
+  { q: "Uang yang diatur berdua dengan jujur, rezekinya terasa dua kali lipat.", a: "KIBY" },
+  { q: "Sedikit demi sedikit, lama-lama menjadi bukit. Yang penting mulai dan konsisten.", a: "Peribahasa Indonesia" },
+  { q: "Kebebasan finansial dibangun dari kebiasaan kecil yang diulang setiap bulan.", a: "Pepatah keuangan" },
+  { q: "Pasangan yang kompak soal uang, kompak juga mengejar mimpinya.", a: "KIBY" },
+  { q: "Catat setiap rupiah — uang yang tercatat tidak akan hilang tanpa jejak.", a: "KIBY" },
+  { q: "Harta yang paling berharga adalah ketenangan pikiran soal masa depan.", a: "Pepatah keuangan" },
+];
+
+async function loadOverview() {
+  const nowD = new Date();
+  const month = todayStr().slice(0, 7);
+  const jam = nowD.getHours();
+  const salam = jam < 11 ? "Selamat pagi ☀️" : jam < 15 ? "Selamat siang 🌤️" : jam < 19 ? "Selamat sore 🌇" : "Selamat malam 🌙";
+  $("#ov-subtitle").textContent = `${salam} • Ringkasan ${NAMA_BULAN[nowD.getMonth()]} ${nowD.getFullYear()}`;
+  const owners = ["bobby", "killa", "kita"];
+  const sums = await Promise.all(owners.map((o) => api(`/api/summary?month=${month}&owner=${o}`)));
+  const totalIn = sums.reduce((a, s) => a + s.totalIn, 0);
+  const totalOut = sums.reduce((a, s) => a + s.totalOut, 0);
+  const balance = totalIn - totalOut;
+  countUp($("#ov-balance"), balance);
+  countUp($("#ov-in"), totalIn);
+  countUp($("#ov-out"), totalOut);
+  const rate = totalIn > 0 ? Math.round(((totalIn - totalOut) / totalIn) * 100) : 0;
+  $("#ov-rate").textContent = rate + "%";
+  const spendPct = totalIn > 0 ? Math.min(100, Math.round((totalOut / totalIn) * 100)) : totalOut > 0 ? 100 : 0;
+  $("#ov-bar").style.width = spendPct + "%";
+  $("#ov-note").textContent =
+    totalIn === 0 && totalOut === 0
+      ? "✨ Mulai catat pemasukan & pengeluaran bulan ini — langkah pertama selalu yang paling penting."
+      : rate >= 40
+        ? `🔥 Luar biasa! Kalian menyisihkan ${rate}% pemasukan bulan ini. Konsisten begini, target besar tinggal soal waktu!`
+        : rate >= 20
+          ? `💪 Keren! ${rate}% pemasukan berhasil disisihkan. Sedikit lagi naik level, teruskan!`
+          : rate >= 0
+            ? `🌱 Saldo gabungan tetap positif (${rate}% tersisih). Coba sisihkan sedikit lebih banyak bulan ini, berdua pasti bisa.`
+            : "💌 Bulan ini pengeluaran lebih besar dari pemasukan. Tidak apa-apa — yang penting sadar, lalu perbaiki pelan-pelan berdua.";
+
+  $("#ov-cards").innerHTML = owners
+    .map((o, i) => {
+      const s = sums[i];
+      const p = s.totalIn > 0 ? Math.min(100, Math.round((s.totalOut / s.totalIn) * 100)) : s.totalOut > 0 ? 100 : 0;
+      return `
+      <button class="card ov-card" data-ov-owner="${o}">
+        <div class="ov-card-head"><span class="ov-ava">${ownerIcon(o)}</span><b>${ownerLabel(o)}</b><span class="ov-go">Buka →</span></div>
+        <div class="ov-card-bal${s.balance < 0 ? " neg" : ""}">${fmtIDR(s.balance)}</div>
+        <div class="ov-card-row"><span>💰 Masuk <b>${fmtIDR(s.totalIn)}</b></span><span>💸 Keluar <b>${fmtIDR(s.totalOut)}</b></span></div>
+        <div class="hero-bar ov-bar"><i style="width:${p}%"></i></div>
+        <small class="muted">Pengeluaran ${p}% dari pemasukan</small>
+      </button>`;
+    })
+    .join("");
+  document.querySelectorAll("[data-ov-owner]").forEach((c) =>
+    c.addEventListener("click", () => setOwner(c.dataset.ovOwner))
+  );
+
+  const dayIdx = Math.floor(nowD.getTime() / 86400000) % MOTIVASI.length;
+  $("#ov-quote-text").textContent = "“" + MOTIVASI[dayIdx].q + "”";
+  $("#ov-quote-author").textContent = "— " + MOTIVASI[dayIdx].a;
+}
 
 // ---------------- dashboard ----------------
 $("#dash-month").addEventListener("change", () => loadDashboard().catch((e) => toast(e.message, false)));
