@@ -59,6 +59,7 @@
     <nav>
       <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
       <button class="nav-btn" data-tab="transaksi">Transaksi</button>
+      <button class="nav-btn" data-tab="struk">🧾 Struk</button>
       <button class="nav-btn" data-tab="tambah">+ Tambah</button>
       <button class="nav-btn" data-tab="hutang">💳 Hutang</button>
     </nav>
@@ -197,6 +198,17 @@
         </div>
         <div id="tx-list"></div>
       </div>
+    </section>
+
+    <!-- STRUK / GALERI FOTO BELANJA -->
+    <section id="tab-struk" class="tab" hidden>
+      <div class="dash-head">
+        <div>
+          <h2>🧾 Galeri Struk</h2>
+          <p class="muted" id="struk-subtitle">Semua foto struk & belanjaan tercatat rapi di sini</p>
+        </div>
+      </div>
+      <div id="struk-grid" class="struk-grid"></div>
     </section>
 
     <!-- TAMBAH -->
@@ -374,6 +386,23 @@
 </div>
 
 <!-- DETAIL TRANSAKSI -->
+<div id="struk-modal" class="lightbox" hidden>
+  <div class="lightbox-backdrop" id="struk-backdrop"></div>
+  <div class="lightbox-box struk-paper">
+    <div class="struk-paper-head">
+      <div class="struk-store" id="struk-store">🧾 Struk Belanja</div>
+      <div class="struk-meta" id="struk-meta"></div>
+    </div>
+    <img id="struk-photo" class="struk-photo" alt="Foto struk" title="Tap untuk perbesar" />
+    <div id="struk-items" class="struk-items"></div>
+    <div class="struk-total"><span>TOTAL</span><b id="struk-total-amt"></b></div>
+    <div class="struk-meta struk-foot" id="struk-foot"></div>
+    <div class="row lightbox-actions">
+      <button id="struk-close" class="btn sm">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <div id="tx-detail" class="lightbox" hidden>
   <div class="lightbox-backdrop" id="tx-detail-backdrop"></div>
   <div class="lightbox-box">

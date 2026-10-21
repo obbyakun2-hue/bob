@@ -380,6 +380,7 @@ function switchTab(name) {
   document.querySelector(".content").dataset.tab = name;
   if (name === "dashboard") loadDashboard().catch((e) => toast(e.message, false));
   if (name === "transaksi") loadTx().catch((e) => toast(e.message, false));
+  if (name === "struk") loadStruk().catch((e) => toast(e.message, false));
   if (name === "hutang") loadDebts().catch((e) => toast(e.message, false));
   if (name === "overview") loadOverview().catch((e) => toast(e.message, false));
   syncOwnerUI();
@@ -865,6 +866,85 @@ async function loadTx() {
     applyBtn.disabled = false;
   }
 }
+
+// ---------------- galeri struk ----------------
+// Semua pembelian berfoto (per pemilik aktif), dikelompokkan per struk.
+async function loadStruk() {
+  $("#struk-grid").innerHTML = '<div class="loading">Memuat galeri struk…</div>';
+  const { transactions } = await api(`/api/transactions?limit=300&offset=0&owner=${state.owner}`);
+  const units = buildTxUnits(transactions).filter((u) => (u.group ? u.receipt_key : u.tx.receipt_key));
+  state.strukUnits = units;
+  const totalAll = units.reduce(
+    (a, u) => a + (u.group ? u.items.reduce((x, t) => x + t.amount, 0) : u.tx.amount),
+    0
+  );
+  $("#struk-subtitle").textContent = units.length
+    ? `${units.length} struk ${ownerIcon(state.owner)} ${ownerLabel(state.owner)} • total ${fmtIDR(totalAll)}`
+    : "Semua foto struk & belanjaan tercatat rapi di sini";
+  $("#struk-grid").innerHTML = units.length
+    ? units
+        .map((u, i) => {
+          const items = u.group ? u.items : [u.tx];
+          const total = items.reduce((a, t) => a + t.amount, 0);
+          const first = items[0];
+          const key = u.group ? u.receipt_key : u.tx.receipt_key;
+          return `
+      <button class="struk-card" data-struk="${i}">
+        <span class="struk-card-imgwrap">
+          <img src="/api/receipt/${escHtml(key)}" alt="Foto struk" loading="lazy" />
+          ${items.length > 1 ? `<span class="struk-badge">${items.length} item</span>` : ""}
+        </span>
+        <span class="struk-card-body">
+          <b>${escHtml(first.category)}${first.note && !u.group ? " • " + escHtml(first.note) : ""}</b>
+          <span class="muted">${fmtDate(first.date)}${first.payment ? " • 💳 " + escHtml(first.payment) : ""}</span>
+          <span class="struk-card-total">${first.type === "in" ? "+" : "-"}${fmtIDR(total)}</span>
+        </span>
+      </button>`;
+        })
+        .join("")
+    : `<div class="card struk-empty">
+         <div class="struk-empty-ico">🧾</div>
+         <b>Belum ada foto struk di menu ${ownerLabel(state.owner)}</b>
+         <p class="muted">Scan struk belanjaanmu di menu + Tambah — fotonya otomatis tersimpan rapi di sini.</p>
+       </div>`;
+  document.querySelectorAll("[data-struk]").forEach((c) =>
+    c.addEventListener("click", () => openStrukDetail(state.strukUnits[Number(c.dataset.struk)]))
+  );
+  document.querySelectorAll(".struk-card img").forEach((img) =>
+    img.addEventListener("error", () => (img.style.opacity = "0.25"))
+  );
+}
+
+function openStrukDetail(u) {
+  if (!u) return;
+  const items = u.group ? u.items : [u.tx];
+  const total = items.reduce((a, t) => a + t.amount, 0);
+  const first = items[0];
+  const key = u.group ? u.receipt_key : u.tx.receipt_key;
+  $("#struk-store").textContent = `🧾 ${first.category}`;
+  $("#struk-meta").textContent =
+    `${fmtDate(first.date)} • ${ownerIcon(state.owner)} ${ownerLabel(state.owner)}` +
+    (first.input_by ? ` • 👤 ${first.input_by}` : "");
+  const img = $("#struk-photo");
+  img.src = "/api/receipt/" + key;
+  img.onclick = () => openLightbox({ src: img.src, fullUrl: img.src });
+  $("#struk-items").innerHTML = items
+    .map(
+      (t) => `
+      <div class="struk-item">
+        <span class="struk-item-name">${escHtml(t.note || t.category)}</span>
+        <span class="struk-item-dots"></span>
+        <span class="struk-item-price">${fmtIDR(t.amount)}</span>
+      </div>`
+    )
+    .join("");
+  $("#struk-total-amt").textContent = fmtIDR(total);
+  $("#struk-foot").textContent =
+    (first.payment ? `💳 Dibayar via ${first.payment} • ` : "") + "Terima kasih sudah mencatat 🙏";
+  $("#struk-modal").hidden = false;
+}
+$("#struk-close").addEventListener("click", () => ($("#struk-modal").hidden = true));
+$("#struk-backdrop").addEventListener("click", () => ($("#struk-modal").hidden = true));
 
 // ---------------- pilih massal + hapus massal ----------------
 const selectedIds = new Set();
