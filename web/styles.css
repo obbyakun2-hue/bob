@@ -444,6 +444,12 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 .ov-quote { display: flex; gap: 14px; align-items: flex-start; padding: 20px; }
 .ov-quote-ico { font-size: 1.7em; }
 .ov-quote p { margin: 0 0 4px; font-size: 1.05em; font-weight: 600; line-height: 1.5; }
+.bulk-total {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 14px; padding: 12px 14px;
+  border: 1px dashed var(--border); border-radius: 12px; background: var(--card2);
+}
+.bulk-total b { font-size: 1.2em; font-variant-numeric: tabular-nums; }
 
 .chart-wrap { position: relative; height: 270px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }

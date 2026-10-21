@@ -1307,7 +1307,79 @@ function resetBulkRows() {
   $("#bulk-rows").innerHTML = "";
   bulkCount = 0;
   for (let i = 0; i < 3; i++) addBulkRow();
+  updateBulkTotal();
 }
+
+// Total keseluruhan borongan — live dari semua nominal baris.
+function updateBulkTotal() {
+  let total = 0;
+  let filled = 0;
+  document.querySelectorAll(".bulk-row .b-amount").forEach((inp) => {
+    const v = parseInt((inp.value || "").replace(/\D/g, ""), 10) || 0;
+    if (v > 0) filled++;
+    total += v;
+  });
+  $("#bulk-total").textContent = fmtIDR(total);
+  $("#bulk-total-info").textContent = filled ? `• dari ${filled} baris terisi` : "";
+}
+$("#bulk-rows").addEventListener("input", (e) => {
+  if (e.target.classList.contains("b-amount")) updateBulkTotal();
+});
+$("#bulk-rows").addEventListener("click", (e) => {
+  if (e.target.classList.contains("b-del")) setTimeout(updateBulkTotal, 0);
+});
+
+// ---------------- scan struk di borongan ----------------
+// Tiap struk hasil scan menjadi 1 baris (foto aslinya ikut terlampir).
+function fillBulkRowFromScan(r, file) {
+  let row = [...document.querySelectorAll(".bulk-row")].find(
+    (el) => !el.querySelector(".b-amount").value && !el.querySelector(".b-note").value.trim()
+  );
+  if (!row) {
+    addBulkRow();
+    row = $("#bulk-rows").lastElementChild;
+  }
+  const typeSel = row.querySelector(".b-type");
+  typeSel.value = "out";
+  typeSel.dispatchEvent(new Event("change")); // isi ulang opsi kategori (keluar)
+  if (r.date) row.querySelector(".b-date").value = r.date;
+  if (r.category) row.querySelector(".b-cat").value = r.category;
+  if (r.amount) row.querySelector(".b-amount").value = Number(r.amount).toLocaleString("id-ID");
+  if (r.merchant) row.querySelector(".b-note").value = r.merchant;
+  try {
+    const fi = row.querySelector(".b-file");
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fi.files = dt.files;
+    fi.dispatchEvent(new Event("change"));
+  } catch { /* foto gagal terlampir — data scan tetap terisi */ }
+}
+$("#bulk-scan").addEventListener("click", () => $("#bulk-scan-file").click());
+$("#bulk-scan-file").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  if (!files.length) return;
+  const btn = $("#bulk-scan");
+  const label = btn.textContent;
+  btn.disabled = true;
+  let okCount = 0;
+  for (let i = 0; i < files.length; i++) {
+    btn.textContent = `⏳ Memindai ${i + 1}/${files.length}…`;
+    try {
+      const fd = new FormData();
+      fd.append("file", await toScanFile(files[i]));
+      const r = await api("/api/scan-receipt", { method: "POST", body: fd });
+      fillBulkRowFromScan(r, files[i]);
+      okCount++;
+    } catch (err) {
+      toast(`Struk ke-${i + 1} gagal: ${err.message}`, false);
+    }
+  }
+  btn.disabled = false;
+  btn.textContent = label;
+  updateBulkTotal();
+  if (okCount) toast(`🧾 ${okCount} struk terbaca — total keseluruhannya ada di bawah baris`);
+});
 
 $("#mode-single").addEventListener("click", () => setEntryMode("single"));
 $("#mode-bulk").addEventListener("click", () => setEntryMode("bulk"));

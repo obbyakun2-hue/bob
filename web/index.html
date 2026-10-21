@@ -211,8 +211,11 @@
         <div id="bulk-rows"></div>
         <div class="row">
           <button type="button" id="bulk-add" class="btn">＋ Tambah baris</button>
+          <button type="button" id="bulk-scan" class="btn">🧾 Scan Struk</button>
+          <input type="file" id="bulk-scan-file" accept="image/*" multiple hidden />
           <button type="button" id="bulk-submit" class="btn primary">Simpan Semua</button>
         </div>
+        <div class="bulk-total">🧮 Total keseluruhan: <b id="bulk-total">Rp0</b><span class="muted" id="bulk-total-info"></span></div>
         <p class="muted small">Baris yang nominalnya kosong dilewati otomatis. Tap 📷 di tiap baris untuk lampirkan foto struk (otomatis dikompres ke WebP).</p>
       </div>
 
