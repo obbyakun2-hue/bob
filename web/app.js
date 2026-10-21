@@ -295,7 +295,7 @@ $("#login-form").addEventListener("submit", async (e) => {
     state.token = d.token;
     localStorage.setItem("uang_token", d.token);
     $("#password").value = "";
-    await showApp();
+    await showApp(true);
     toast("Selamat datang! 👋");
   } catch (err) {
     toast(err.message, false);
@@ -326,7 +326,7 @@ $("#tg-test-btn").addEventListener("click", async () => {
   btn.disabled = false;
 });
 
-async function showApp() {
+async function showApp(greet = false) {
   $("#login-view").hidden = true;
   $("#app-view").hidden = false;
   try {
@@ -353,7 +353,7 @@ async function showApp() {
   resetDocForm();
   switchMenu("management");
   switchTab("overview");
-  playGreeting();
+  if (greet) playGreeting();
 }
 
 // ---------------- tabs ----------------
@@ -1541,11 +1541,9 @@ $("#tx-form").addEventListener("submit", async (e) => {
   btn.disabled = false;
 });
 
-// Sapaan suara saat masuk aplikasi (sekali per sesi). Kalau autoplay
-// ke-block browser (buka ulang tanpa klik), putar saat sentuhan pertama.
+// Sapaan suara — diputar tiap LOGIN berhasil (bukan tiap buka halaman).
+// Kalau autoplay ke-block browser, diputar saat sentuhan/klik pertama.
 function playGreeting() {
-  if (sessionStorage.getItem("uang_greeted")) return;
-  sessionStorage.setItem("uang_greeted", "1");
   const audio = new Audio("sapaan.mp3");
   audio.play().catch(() => {
     window.addEventListener("pointerdown", () => audio.play().catch(() => {}), { once: true });
