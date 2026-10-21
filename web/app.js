@@ -17,6 +17,7 @@ const state = {
   recentTx: [],
   docs: [],
   owner: localStorage.getItem("uang_owner") || "kita",
+  docOwner: localStorage.getItem("uang_doc_owner") || "bobby",
 };
 
 // ---------------- pemilik data: Bobby / Killa / Kita ----------------
@@ -387,9 +388,11 @@ function switchTab(name) {
 function switchMenu(name) {
   document.querySelectorAll(".side-btn").forEach((b) => b.classList.toggle("active", b.dataset.menu === name));
   document.querySelector(".content").dataset.menu = name;
+  document.body.dataset.menu = name;
   $("#view-management").hidden = name !== "management";
   $("#view-dokumen").hidden = name !== "dokumen";
   if (name === "dokumen") loadDocs().catch((e) => toast(e.message, false));
+  syncDocOwnerUI();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll(".side-btn").forEach((b) =>
@@ -405,6 +408,36 @@ document.querySelector('.side-btn[data-menu="management"]').addEventListener("cl
 if (localStorage.getItem("uang_submenu") === "closed") {
   document.querySelector(".side-nav").classList.add("sub-closed");
 }
+// Klik "Dokumen": lipat/buka submenu pemilik dokumen (▾)
+document.querySelector('.side-btn[data-menu="dokumen"]').addEventListener("click", () => {
+  const nav = document.querySelector(".side-nav");
+  nav.classList.toggle("doc-sub-closed");
+  localStorage.setItem("uang_doc_submenu", nav.classList.contains("doc-sub-closed") ? "closed" : "open");
+});
+if (localStorage.getItem("uang_doc_submenu") === "closed") {
+  document.querySelector(".side-nav").classList.add("doc-sub-closed");
+}
+
+// ---------------- pemilik dokumen: Bobby / Killa ----------------
+function syncDocOwnerUI() {
+  const onDokumen = !$("#view-dokumen").hidden;
+  document.querySelectorAll(".doc-owner-btn").forEach((b) =>
+    b.classList.toggle("active", onDokumen && b.dataset.docOwner === state.docOwner)
+  );
+}
+function setDocOwner(o) {
+  if (o !== "bobby" && o !== "killa") return;
+  state.docOwner = o;
+  localStorage.setItem("uang_doc_owner", o);
+  syncDocOwnerUI();
+  loadDocs().catch((e) => toast(e.message, false));
+}
+document.querySelectorAll(".doc-owner-btn").forEach((b) =>
+  b.addEventListener("click", () => {
+    switchMenu("dokumen");
+    setDocOwner(b.dataset.docOwner);
+  })
+);
 
 // ---------------- overview management ----------------
 const MOTIVASI = [
@@ -1108,7 +1141,8 @@ function docRow(d) {
 
 async function loadDocs() {
   $("#doc-list").innerHTML = '<div class="loading">Memuat dokumen…</div>';
-  const { documents } = await api("/api/documents");
+  $("#doc-subtitle").textContent = `Arsip dokumen ${ownerIcon(state.docOwner)} ${ownerLabel(state.docOwner)}`;
+  const { documents } = await api("/api/documents?owner=" + state.docOwner);
   state.docs = documents;
   $("#doc-count").textContent = documents.length ? `${documents.length} dokumen` : "";
   $("#doc-list").innerHTML = documents.length
@@ -1176,6 +1210,7 @@ $("#doc-form").addEventListener("submit", async (e) => {
         doc_date: $("#doc-date").value || todayStr(),
         note: $("#doc-note").value.trim(),
         photo_key: ud.key,
+        owner: state.docOwner,
       }),
     });
     toast(

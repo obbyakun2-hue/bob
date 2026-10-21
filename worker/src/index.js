@@ -592,9 +592,12 @@ export default {
         if (!(await getAuthUser(request, env))) return unauthorized();
 
         if (request.method === "GET") {
+          const docOwnerParam = url.searchParams.get("owner");
+          const docWhere = docOwnerParam === "killa" || docOwnerParam === "bobby" ? " WHERE owner = ?" : "";
+          const docBind = docWhere ? [docOwnerParam] : [];
           const { results } = await env.DB.prepare(
-            "SELECT * FROM documents ORDER BY doc_date DESC, created_at DESC"
-          ).all();
+            `SELECT * FROM documents${docWhere} ORDER BY doc_date DESC, created_at DESC`
+          ).bind(...docBind).all();
           return json({ documents: results || [] });
         }
 
@@ -614,11 +617,12 @@ export default {
           const doc = {
             id: crypto.randomUUID(),
             title, category, doc_date, note, photo_key,
+            owner: b.owner === "killa" ? "killa" : "bobby",
             created_at: new Date().toISOString(),
           };
           await env.DB.prepare(
-            "INSERT INTO documents (id, title, category, doc_date, note, photo_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-          ).bind(doc.id, doc.title, doc.category, doc.doc_date, doc.note, doc.photo_key, doc.created_at).run();
+            "INSERT INTO documents (id, title, category, doc_date, note, photo_key, owner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(doc.id, doc.title, doc.category, doc.doc_date, doc.note, doc.photo_key, doc.owner, doc.created_at).run();
           return json({ document: doc }, 201);
         }
 

@@ -141,7 +141,7 @@ body::before {
 .side-ico { font-size: 1.3em; }
 /* Sub-menu pemilik di bawah Management: Bobby / Killa / Kita */
 .side-sub { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 2px 18px; padding-left: 10px; border-left: 2px solid var(--border); }
-.owner-btn {
+.owner-btn, .doc-owner-btn {
   display: flex; align-items: center; gap: 10px;
   border: none; background: transparent; border-radius: 12px;
   padding: 9px 12px; cursor: pointer;
@@ -149,16 +149,18 @@ body::before {
   color: var(--muted); text-align: left; width: 100%;
   transition: background 0.18s, color 0.18s, box-shadow 0.18s;
 }
-.owner-btn:hover { background: var(--card2); color: var(--text); }
-.owner-btn.active {
+.owner-btn:hover, .doc-owner-btn:hover { background: var(--card2); color: var(--text); }
+.owner-btn.active, .doc-owner-btn.active {
   background: var(--green-soft); color: var(--text);
   box-shadow: inset 0 0 0 1.5px rgba(16, 185, 129, 0.4);
 }
-.owner-btn .side-ico { font-size: 1.15em; }
+.owner-btn .side-ico, .doc-owner-btn .side-ico { font-size: 1.15em; }
 /* Panah lipat di menu Management + submenu tertutup */
 .side-caret { margin-left: auto; font-size: 0.8em; transition: transform 0.2s; }
-.side-nav.sub-closed .side-caret { transform: rotate(-90deg); }
-.side-nav.sub-closed .side-sub { display: none; }
+.side-nav.sub-closed [data-menu="management"] .side-caret { transform: rotate(-90deg); }
+.side-nav.sub-closed #owner-nav { display: none; }
+.side-nav.doc-sub-closed #doc-caret { transform: rotate(-90deg); }
+.side-nav.doc-sub-closed #doc-owner-nav { display: none; }
 /* Di Overview, tab atas (Dashboard/Transaksi/Tambah/Hutang) disembunyikan — bersih */
 .content[data-tab="overview"] .topbar nav { display: none; }
 /* Kotak drag & drop foto (form Dokumen) */
@@ -199,7 +201,10 @@ body::before {
   .side-nav { flex-direction: row; width: 100%; gap: 6px; }
   .side-btn { flex: 1; justify-content: center; padding: 11px 6px; }
   .side-sub { flex-direction: row; margin: 0; padding-left: 0; border-left: none; gap: 6px; flex: 1.6; }
-  .owner-btn { flex: 1; justify-content: center; padding: 11px 4px; }
+  .owner-btn, .doc-owner-btn { flex: 1; justify-content: center; padding: 11px 4px; }
+  /* Di HP, submenu yang tampil cuma milik menu yang aktif (hemat tempat) */
+  body[data-menu="dokumen"] #owner-nav { display: none; }
+  body[data-menu="management"] #doc-owner-nav { display: none; }
   .content { padding-bottom: 78px; }
 }
 

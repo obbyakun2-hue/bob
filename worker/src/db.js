@@ -79,6 +79,14 @@ export async function initDb(db) {
     await db.exec("UPDATE debts SET owner = 'killa' WHERE LOWER(TRIM(input_by)) = 'killa'");
   }
 
+  // Migrasi: kolom owner untuk dokumen (bobby/killa — dokumen itu pribadi).
+  // Dokumen lama dianggap milik Bobby (pemilik akun).
+  const docCols = await db.prepare("PRAGMA table_info(documents)").all();
+  const hasDocOwner = (docCols.results || []).some((c) => c.name === "owner");
+  if (!hasDocOwner) {
+    await db.exec("ALTER TABLE documents ADD COLUMN owner TEXT NOT NULL DEFAULT 'bobby'");
+  }
+
   // Seed penginput default — idempoten seperti kategori.
   const ipPlaceholders = DEFAULT_INPUTTERS.map(() => "(?)").join(", ");
   await db

@@ -37,7 +37,11 @@
         <button class="owner-btn" data-owner="killa"><span class="side-ico">👩</span><span class="side-label">Killa</span></button>
         <button class="owner-btn" data-owner="kita"><span class="side-ico">👥</span><span class="side-label">Kita</span></button>
       </div>
-      <button class="side-btn" data-menu="dokumen"><span class="side-ico">📄</span><span class="side-label">Dokumen</span></button>
+      <button class="side-btn" data-menu="dokumen"><span class="side-ico">📄</span><span class="side-label">Dokumen</span><span class="side-caret" id="doc-caret">▾</span></button>
+      <div class="side-sub" id="doc-owner-nav">
+        <button class="doc-owner-btn" data-doc-owner="bobby"><span class="side-ico">🧑</span><span class="side-label">Bobby</span></button>
+        <button class="doc-owner-btn" data-doc-owner="killa"><span class="side-ico">👩</span><span class="side-label">Killa</span></button>
+      </div>
     </nav>
   </aside>
 
@@ -285,7 +289,7 @@
     <div class="dash-head">
       <div>
         <h2>📄 Dokumen</h2>
-        <p class="muted">Arsip dokumen penting beserta foto</p>
+        <p class="muted" id="doc-subtitle">Arsip dokumen penting beserta foto</p>
       </div>
     </div>
 
