@@ -319,10 +319,31 @@ $("#logout-btn").addEventListener("click", () => {
 });
 
 // ---------------- layar pilih profil (ala Netflix) ----------------
-// Backsound "ta-dum" ala Netflix — disintesis via WebAudio (tanpa file audio):
-// desis naik (reverse cymbal) -> ketukan "ta" -> akord orkestra "dum" + gema.
-let audioCtx = null;
+// Backsound "ta-dum" Netflix: file audio asli (ta-dum.mp3, dari user).
+// Kalau file gagal dimuat, fallback ke sintesis WebAudio di bawah.
+const tadumAudio = new Audio("ta-dum.mp3");
+tadumAudio.preload = "auto";
+let tadumBroken = false;
+tadumAudio.addEventListener("error", () => {
+  tadumBroken = true;
+});
 function playNetflixSound() {
+  if (!tadumBroken) {
+    try {
+      tadumAudio.currentTime = 0;
+      const p = tadumAudio.play();
+      if (p && p.catch) p.catch(() => playTaDumSynth());
+      return;
+    } catch {
+      /* lanjut ke sintesis */
+    }
+  }
+  playTaDumSynth();
+}
+
+// Sintesis "ta-dum" via WebAudio (cadangan): desis naik -> ketukan -> akord + gema.
+let audioCtx = null;
+function playTaDumSynth() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") audioCtx.resume();
