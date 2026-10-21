@@ -247,18 +247,39 @@ async function handleRequest(request, env, ctx) {
           "SELECT name FROM categories WHERE type = 'out' ORDER BY name"
         ).all();
         const catNames = (catRows || []).map((c) => c.name);
+        // Format Workers AI vision terkini: messages + image sebagai data URI base64.
         const bytes = new Uint8Array(await file.arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        }
+        const dataUri = `data:${file.type || "image/jpeg"};base64,${btoa(bin)}`;
+        const messages = [
+          { role: "system", content: "Kamu adalah mesin pembaca struk belanja Indonesia. Balas hanya JSON valid, tanpa teks lain." },
+          { role: "user", content: buildScanPrompt(catNames) },
+        ];
+        const runVision = () =>
+          env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { messages, image: dataUri });
         let aiRes;
         try {
-          aiRes = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
-            prompt: buildScanPrompt(catNames),
-            image: [...bytes],
-            max_tokens: 512,
-          });
-        } catch (e) {
-          return json({ error: "AI gagal memproses foto — coba lagi atau isi manual" }, 502);
+          aiRes = await runVision();
+        } catch (e1) {
+          // Pemakaian pertama model Llama butuh persetujuan lisensi Meta —
+          // picu dengan prompt "agree" sekali, lalu ulangi panggilan aslinya.
+          try {
+            await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+              messages: [{ role: "user", content: "agree" }],
+            });
+            aiRes = await runVision();
+          } catch (e2) {
+            return json(
+              { error: "AI gagal memproses foto: " + String(e2?.message || e1?.message || e2).slice(0, 180) },
+              502
+            );
+          }
         }
-        const parsed = parseScanResult(aiRes?.response || "", catNames);
+        const rawText = aiRes?.response ?? aiRes?.result ?? aiRes?.choices?.[0]?.message?.content ?? "";
+        const parsed = parseScanResult(typeof rawText === "string" ? rawText : JSON.stringify(rawText), catNames);
         if (!parsed) {
           return json({ error: "Struk tidak terbaca jelas — coba foto lebih terang & lurus, atau isi manual" }, 422);
         }

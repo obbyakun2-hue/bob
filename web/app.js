@@ -1429,6 +1429,33 @@ $("#tx-file").addEventListener("change", () => {
 // ---------------- scan struk (AI) ----------------
 // Foto struk -> nominal/tanggal/kategori terisi otomatis (user tetap
 // meninjau & menekan Simpan sendiri).
+// Khusus scan AI: kirim JPEG (format paling aman untuk model vision),
+// sisi terpanjang 1600px agar tulisan struk tetap terbaca.
+async function toScanFile(file) {
+  try {
+    if (!("createImageBitmap" in window)) return file;
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: "fromImage" });
+    } catch {
+      bitmap = await createImageBitmap(file);
+    }
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.85));
+    if (!blob) return file;
+    return new File([blob], "struk.jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 async function scanReceipt(file) {
   const btn = $("#tx-scan");
   const label = btn.textContent;
@@ -1436,7 +1463,7 @@ async function scanReceipt(file) {
   btn.textContent = "⏳ Memindai struk…";
   try {
     const fd = new FormData();
-    fd.append("file", await toUploadFile(file));
+    fd.append("file", await toScanFile(file));
     const r = await api("/api/scan-receipt", { method: "POST", body: fd });
     setFormType("out"); // struk hampir selalu pengeluaran (sekalian isi ulang opsi kategori)
     if (r.amount) $("#tx-amount").value = Number(r.amount).toLocaleString("id-ID");
