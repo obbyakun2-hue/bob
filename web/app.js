@@ -319,6 +319,42 @@ $("#logout-btn").addEventListener("click", () => {
 });
 
 // ---------------- layar pilih profil (ala Netflix) ----------------
+// Backsound "ta-dum" ala Netflix — disintesis via WebAudio (tanpa file audio).
+let audioCtx = null;
+function playNetflixSound() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t0 = audioCtx.currentTime;
+    const master = audioCtx.createGain();
+    master.gain.value = 0.55;
+    master.connect(audioCtx.destination);
+    const hit = (freqs, start, dur, vol, type = "triangle") => {
+      freqs.forEach((f) => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0, t0 + start);
+        g.gain.linearRampToValueAtTime(vol, t0 + start + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+        o.connect(g);
+        g.connect(master);
+        o.start(t0 + start);
+        o.stop(t0 + start + dur + 0.1);
+      });
+    };
+    // "ta-" — hentakan rendah pertama
+    hit([98, 147, 196], 0, 0.45, 0.5);
+    hit([49], 0, 0.5, 0.6, "sine");
+    // "-dum" — akord mayor cerah menyusul, bergema lebih lama
+    hit([147, 185, 220, 294, 370], 0.32, 1.5, 0.32);
+    hit([73], 0.32, 1.2, 0.5, "sine");
+  } catch {
+    /* audio tidak tersedia — diam saja */
+  }
+}
+
 function openProfiles() {
   $("#profile-screen").hidden = false;
 }
@@ -327,6 +363,7 @@ function closeProfiles() {
 }
 document.querySelectorAll("[data-pf]").forEach((t) =>
   t.addEventListener("click", () => {
+    playNetflixSound();
     closeProfiles();
     switchMenu("management");
     setOwner(t.dataset.pf);
@@ -338,7 +375,10 @@ $("#pf-overview").addEventListener("click", () => {
   switchTab("overview");
 });
 $("#pf-close").addEventListener("click", closeProfiles);
-$("#profiles-btn").addEventListener("click", openProfiles);
+$("#profiles-btn").addEventListener("click", () => {
+  playNetflixSound();
+  openProfiles();
+});
 $("#theme-btn").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
