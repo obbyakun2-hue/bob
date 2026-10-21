@@ -32,7 +32,6 @@ function syncOwnerUI() {
   document.querySelectorAll(".owner-btn").forEach((b) =>
     b.classList.toggle("active", b.dataset.owner === state.owner)
   );
-  document.querySelectorAll(".owner-select").forEach((s) => (s.value = state.owner));
 }
 
 // Ganti pemilik aktif: semua tampilan Management ikut pemilik ini.
@@ -715,7 +714,6 @@ function resetDebtForm() {
   state.editingDebtId = null;
   $("#debt-form").reset();
   $("#debt-start").value = todayStr();
-  $("#debt-owner").value = state.owner;
   setDebtType("hutang");
   $("#debt-form-title").textContent = "Tambah Hutang";
   $("#debt-submit").textContent = "Simpan";
@@ -827,7 +825,6 @@ function startEditDebt(id) {
     inpSel.appendChild(opt);
   }
   if (d.input_by) inpSel.value = d.input_by;
-  $("#debt-owner").value = d.owner || "kita";
   $("#debt-submit").textContent = "Simpan Perubahan";
   window.scrollTo(0, document.body.scrollHeight);
 }
@@ -851,7 +848,7 @@ $("#debt-form").addEventListener("submit", async (e) => {
       due_date: $("#debt-due").value || "",
       note: $("#debt-note").value.trim(),
       input_by: $("#debt-inputter").value || "",
-      owner: $("#debt-owner").value || state.owner,
+      owner: state.owner,
     };
     if (state.editingDebtId) {
       await api("/api/debts/" + state.editingDebtId, {
@@ -1151,7 +1148,7 @@ $("#bulk-submit").addEventListener("click", async () => {
     const r = await api("/api/transactions/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: payload, input_by, owner: $("#bulk-owner").value || state.owner }),
+      body: JSON.stringify({ items: payload, input_by, owner: state.owner }),
     });
     const nPhoto = uploaded.filter((x) => x.receipt_key).length;
     toast(
@@ -1221,7 +1218,6 @@ function resetForm() {
   $("#tx-cancel").hidden = true;
   $("#tx-form").reset();
   $("#tx-date").value = todayStr();
-  $("#tx-owner").value = state.owner;
   $("#tx-preview-wrap").hidden = true;
   $("#tx-preview").src = "";
   setFormType("out");
@@ -1244,7 +1240,6 @@ function startEdit(id) {
     inpSel.appendChild(opt);
   }
   if (t.input_by) inpSel.value = t.input_by;
-  $("#tx-owner").value = t.owner || "kita";
   // Preview struk yang sudah ada (kalau ada)
   state.removeReceipt = false;
   if (t.receipt_key) {
@@ -1312,7 +1307,7 @@ $("#tx-form").addEventListener("submit", async (e) => {
       amount,
       note: $("#tx-note").value.trim(),
       input_by: $("#tx-inputter").value || "",
-      owner: $("#tx-owner").value || state.owner,
+      owner: state.owner,
     };
     let receipt_key = "";
     let notified = false;
