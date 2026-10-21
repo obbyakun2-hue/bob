@@ -123,6 +123,11 @@ export async function notifyDebtPaid(env, d) {
     console.log("notifyDebtPaid failed:", e?.message || e);
   }
 }
+// Pesan teks bebas (dipakai pengingat jatuh tempo).
+export async function sendText(env, text) {
+  return tgSend(env, "sendMessage", { text, parse_mode: "HTML" });
+}
+
 export async function testTelegram(env) {  if (!env.TELEGRAM_BOT_TOKEN) return { ok: false, error: "TELEGRAM_BOT_TOKEN kosong di worker" };
   if (!env.TELEGRAM_CHAT_ID) return { ok: false, error: "TELEGRAM_CHAT_ID kosong di worker" };
   try {

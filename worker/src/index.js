@@ -3,7 +3,7 @@
 
 import { initDb } from "./db.js";
 import { createToken, getAuthUser, unauthorized, checkPassword } from "./auth.js";
-import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram, notifyDebt, notifyDebtPaid } from "./telegram.js";
+import { notifyTransaction, notifyBatch, txMessage, sendPhotoByFileId, testTelegram, notifyDebt, notifyDebtPaid, sendText, formatIDR } from "./telegram.js";
 
 const json = (data, status = 200) => Response.json(data, { status });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,7 +50,58 @@ async function loginAttempt(env, request, success) {
   } catch { /* abaikan */ }
 }
 
+// ---------------- pengingat jatuh tempo hutang ----------------
+// Jalan via cron harian (08:00 WIB): mengingatkan H-3 dan hari-H untuk
+// hutang belum lunas. Anti-duplikat: flag KV per hutang per jenis.
+function wibToday() {
+  return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+const escHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const OWNER_LABEL_ID = { bobby: "🧑 Bobby", killa: "👩 Killa", kita: "👥 Kita" };
+
+async function runDueReminders(env, dryRun = false) {
+  const today = wibToday();
+  const targets = [
+    { date: addDays(today, 3), label: "3 hari lagi", flag: "h3" },
+    { date: today, label: "HARI INI", flag: "h0" },
+  ];
+  const sent = [];
+  for (const t of targets) {
+    const { results } = await env.DB.prepare(
+      "SELECT * FROM debts WHERE status = 'belum' AND type = 'hutang' AND due_date = ? ORDER BY amount DESC"
+    ).bind(t.date).all();
+    for (const d of results || []) {
+      const key = `due-reminded:${d.id}:${t.flag}`;
+      if (!dryRun && env.RECEIPTS && (await env.RECEIPTS.get(key))) continue;
+      const text =
+        `⏰ <b>Pengingat Hutang — jatuh tempo ${t.label}!</b>\n` +
+        `👤 Kepada: <b>${escHtml(d.person)}</b>\n` +
+        `💰 Nominal: <b>${formatIDR(d.amount)}</b>\n` +
+        `📅 Tenggat: ${d.due_date}\n` +
+        `🏷️ Milik: ${OWNER_LABEL_ID[d.owner] || escHtml(d.owner || "-")}`;
+      if (dryRun) {
+        sent.push({ id: d.id, person: d.person, flag: t.flag, due: d.due_date, preview: text.replace(/<[^>]+>/g, "") });
+        continue;
+      }
+      const r = await sendText(env, text);
+      if (r.skipped) { sent.push({ id: d.id, flag: t.flag, skipped: "telegram belum diatur" }); continue; }
+      if (env.RECEIPTS) await env.RECEIPTS.put(key, "1", { expirationTtl: 60 * 60 * 24 * 40 });
+      sent.push({ id: d.id, person: d.person, flag: t.flag, due: d.due_date });
+    }
+  }
+  return { today, sent };
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runDueReminders(env).catch((e) => console.log("reminder error:", e?.message || e)));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -62,6 +113,15 @@ export default {
       }
 
       // ---------- init database (dipanggil workflow setelah deploy) ----------
+      // ---------- pengingat hutang: jalankan manual (dry=1 untuk cek) ----------
+      if (path.startsWith("/api/reminders/run/")) {
+        const secret = decodeURIComponent(path.slice("/api/reminders/run/".length));
+        if (!env.JWT_SECRET || secret !== env.JWT_SECRET) {
+          return json({ error: "forbidden" }, 403);
+        }
+        return json(await runDueReminders(env, url.searchParams.get("dry") === "1"));
+      }
+
       if (path.startsWith("/api/init/")) {
         const secret = decodeURIComponent(path.slice("/api/init/".length));
         if (!env.JWT_SECRET || secret !== env.JWT_SECRET) {

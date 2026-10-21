@@ -10,6 +10,10 @@ name = "${NAME}"
 main = "src/index.js"
 compatibility_date = "2025-10-01"
 
+# Pengingat hutang harian: 01:00 UTC = 08:00 WIB
+[triggers]
+crons = ["0 1 * * *"]
+
 [assets]
 directory = "../web"
 not_found_handling = "single-page-application"
