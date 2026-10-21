@@ -1592,6 +1592,31 @@ function playGreeting() {
   });
 }
 
+// ---------------- PWA: service worker + tombol instal ----------------
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+let deferredInstall = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  $("#install-btn").hidden = false;
+});
+$("#install-btn").addEventListener("click", async () => {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice.catch(() => {});
+  deferredInstall = null;
+  $("#install-btn").hidden = true;
+});
+window.addEventListener("appinstalled", () => {
+  deferredInstall = null;
+  $("#install-btn").hidden = true;
+  toast("KIBY terinstal 🎉 Cek home screen kamu!");
+});
+
 // ---------------- init ----------------
 initTheme();
 if (state.token) showApp().catch(() => logout());
