@@ -427,16 +427,15 @@ function syncDocOwnerUI() {
 }
 function setDocOwner(o) {
   if (o !== "bobby" && o !== "killa") return;
+  const changed = state.docOwner !== o;
   state.docOwner = o;
   localStorage.setItem("uang_doc_owner", o);
+  if ($("#view-dokumen").hidden) switchMenu("dokumen"); // switchMenu memuat dokumen sekali
+  else if (changed) loadDocs().catch((e) => toast(e.message, false));
   syncDocOwnerUI();
-  loadDocs().catch((e) => toast(e.message, false));
 }
 document.querySelectorAll(".doc-owner-btn").forEach((b) =>
-  b.addEventListener("click", () => {
-    switchMenu("dokumen");
-    setDocOwner(b.dataset.docOwner);
-  })
+  b.addEventListener("click", () => setDocOwner(b.dataset.docOwner))
 );
 
 // ---------------- overview management ----------------
@@ -1140,9 +1139,11 @@ function docRow(d) {
 }
 
 async function loadDocs() {
+  const reqOwner = state.docOwner;
   $("#doc-list").innerHTML = '<div class="loading">Memuat dokumen…</div>';
-  $("#doc-subtitle").textContent = `Arsip dokumen ${ownerIcon(state.docOwner)} ${ownerLabel(state.docOwner)}`;
-  const { documents } = await api("/api/documents?owner=" + state.docOwner);
+  $("#doc-subtitle").textContent = `Arsip dokumen ${ownerIcon(reqOwner)} ${ownerLabel(reqOwner)}`;
+  const { documents } = await api("/api/documents?owner=" + reqOwner);
+  if (reqOwner !== state.docOwner) return; // pemilik sudah berganti — abaikan respons lama
   state.docs = documents;
   $("#doc-count").textContent = documents.length ? `${documents.length} dokumen` : "";
   $("#doc-list").innerHTML = documents.length
