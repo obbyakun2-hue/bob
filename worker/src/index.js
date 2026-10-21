@@ -258,22 +258,37 @@ async function handleRequest(request, env, ctx) {
           { role: "system", content: "Kamu adalah mesin pembaca struk belanja Indonesia. Balas hanya JSON valid, tanpa teks lain." },
           { role: "user", content: buildScanPrompt(catNames) },
         ];
-        const runVision = () =>
-          env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { messages, image: dataUri });
+        const MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+        const runVision = () => env.AI.run(MODEL, { messages, image: dataUri });
         let aiRes;
         try {
           aiRes = await runVision();
         } catch (e1) {
-          // Pemakaian pertama model Llama butuh persetujuan lisensi Meta —
-          // picu dengan prompt "agree" sekali, lalu ulangi panggilan aslinya.
+          // Pemakaian pertama model Llama butuh persetujuan lisensi Meta
+          // (error 5016): picu dengan input {prompt:"agree"} persis seperti
+          // dokumentasi, lalu ulangi panggilan aslinya.
+          let agreed = false;
+          for (const inputs of [
+            { prompt: "agree" },
+            { messages: [{ role: "user", content: "agree" }] },
+          ]) {
+            try {
+              await env.AI.run(MODEL, inputs);
+              agreed = true;
+              break;
+            } catch { /* coba bentuk berikutnya */ }
+          }
+          if (!agreed) {
+            return json(
+              { error: "AI gagal memproses foto: " + String(e1?.message || e1).slice(0, 180) },
+              502
+            );
+          }
           try {
-            await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
-              messages: [{ role: "user", content: "agree" }],
-            });
             aiRes = await runVision();
           } catch (e2) {
             return json(
-              { error: "AI gagal memproses foto: " + String(e2?.message || e1?.message || e2).slice(0, 180) },
+              { error: "AI gagal memproses foto: " + String(e2?.message || e2).slice(0, 180) },
               502
             );
           }
