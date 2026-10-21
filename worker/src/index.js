@@ -580,16 +580,17 @@ async function handleRequest(request, env, ctx) {
             input_by,
             owner: it.owner !== undefined ? validOwner(it.owner) : batchOwner,
             payment: matchPayment(it.payment) || "",
+            group_id: String(it.group_id || "").replace(/[^\w-]/g, "").slice(0, 40),
             created_at: new Date().toISOString(),
           };
           txs.push(tx);
           if (!notified) recapTxs.push(tx);
         }
         const stmt = env.DB.prepare(
-          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, payment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO transactions (id, date, type, category, amount, note, receipt_key, input_by, owner, payment, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         await env.DB.batch(
-          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.owner, t.payment, t.created_at))
+          txs.map((t) => stmt.bind(t.id, t.date, t.type, t.category, t.amount, t.note, t.receipt_key, t.input_by, t.owner, t.payment, t.group_id, t.created_at))
         );
         // Rekap teks hanya untuk baris yang belum ternotifikasi via foto (anti dobel)
         if (recapTxs.length) ctx.waitUntil(notifyBatch(env, recapTxs, input_by));

@@ -736,6 +736,38 @@ document.querySelectorAll(".inputter-del").forEach((btn) =>
   })
 );
 
+// Kelompokkan transaksi: item-item dari 1 struk (group_id sama) jadi 1 unit.
+// Data lama tanpa group_id dikenali secara heuristik: 1 batch dikenali dari
+// menit created_at yang sama + tanggal/kategori/tipe/penginput/pembayaran sama.
+function buildTxUnits(transactions) {
+  const keyOf = (t) =>
+    t.group_id ||
+    `legacy:${t.date}|${t.category}|${t.type}|${t.input_by || ""}|${t.payment || ""}|${(t.created_at || "").slice(0, 16)}`;
+  const counts = new Map();
+  for (const t of transactions) counts.set(keyOf(t), (counts.get(keyOf(t)) || 0) + 1);
+  const units = [];
+  const byKey = new Map();
+  for (const t of transactions) {
+    const k = keyOf(t);
+    if (counts.get(k) >= 2) {
+      if (!byKey.has(k)) {
+        const u = {
+          group: true, id: k, items: [], type: t.type, date: t.date,
+          category: t.category, input_by: t.input_by, payment: t.payment || "", receipt_key: "",
+        };
+        byKey.set(k, u);
+        units.push(u);
+      }
+      const u = byKey.get(k);
+      u.items.push(t);
+      if (t.receipt_key && !u.receipt_key) u.receipt_key = t.receipt_key;
+    } else {
+      units.push({ group: false, tx: t });
+    }
+  }
+  return units;
+}
+
 async function loadTx() {
   const applyBtn = $("#f-apply");
   applyBtn.disabled = true;
@@ -753,10 +785,7 @@ async function loadTx() {
   selectedIds.clear();
   $("#sel-bar").hidden = transactions.length === 0;
   updateSelBar();
-  $("#tx-list").innerHTML = transactions.length
-    ? transactions
-        .map(
-          (t) => `
+  const singleRow = (t) => `
     <div class="tx-row ${t.type}" data-tx-id="${t.id}">
       <input type="checkbox" class="tx-check" data-id="${t.id}" title="Pilih" />
       <div class="tx-ico">${catIcon(t.category, t.type)}</div>
@@ -769,17 +798,55 @@ async function loadTx() {
         <button class="btn sm" data-edit="${t.id}">Ubah</button>
         <button class="btn sm danger" data-del="${t.id}">Hapus</button>
       </div>
-    </div>`
-        )
+    </div>`;
+  $("#tx-list").innerHTML = transactions.length
+    ? buildTxUnits(transactions)
+        .map((u) => {
+          if (!u.group) return singleRow(u.tx);
+          const total = u.items.reduce((a, t) => a + t.amount, 0);
+          return `
+    <div class="tx-group">
+      <div class="tx-row ${u.type} tx-group-head" data-group-head="${escHtml(u.id)}">
+        <input type="checkbox" class="tx-check tx-check-group" data-group-ids="${u.items.map((t) => t.id).join(",")}" title="Pilih semua item grup" />
+        <div class="tx-ico">🧾</div>
+        <div class="tx-main"><b>${escHtml(u.category)} • ${u.items.length} item</b>
+          <span class="muted">${fmtDate(u.date)}${u.input_by ? " • 👤 " + escHtml(u.input_by) : ""}${u.payment ? " • 💳 " + escHtml(u.payment) : ""} • tap untuk rincian</span>
+        </div>
+        <div class="tx-amt">${u.type === "in" ? "+" : "-"}${fmtIDR(total)}</div>
+        ${u.receipt_key ? `<img class="tx-receipt-thumb" src="/api/receipt/${escHtml(u.receipt_key)}" alt="struk" loading="lazy" title="Tap untuk preview" />` : ""}
+        <span class="tx-caret">▸</span>
+      </div>
+      <div class="tx-group-items" hidden>
+        ${u.items.map(singleRow).join("")}
+      </div>
+    </div>`;
+        })
         .join("")
     : `<p class="muted">Tidak ada transaksi pada filter ini.</p>`;
   document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => startEdit(b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => delTx(b.dataset.del)));
-  document.querySelectorAll(".tx-check").forEach((c) =>
+  document.querySelectorAll(".tx-check:not(.tx-check-group)").forEach((c) =>
     c.addEventListener("change", () => {
       if (c.checked) selectedIds.add(c.dataset.id);
       else selectedIds.delete(c.dataset.id);
       updateSelBar();
+    })
+  );
+  document.querySelectorAll(".tx-check-group").forEach((c) =>
+    c.addEventListener("change", () => {
+      const ids = (c.dataset.groupIds || "").split(",").filter(Boolean);
+      ids.forEach((id) => (c.checked ? selectedIds.add(id) : selectedIds.delete(id)));
+      c.closest(".tx-group")?.querySelectorAll(".tx-group-items .tx-check").forEach((ic) => (ic.checked = c.checked));
+      updateSelBar();
+    })
+  );
+  document.querySelectorAll("[data-group-head]").forEach((head) =>
+    head.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, img, a")) return;
+      const wrap = head.closest(".tx-group");
+      const items = wrap.querySelector(".tx-group-items");
+      items.hidden = !items.hidden;
+      wrap.classList.toggle("open", !items.hidden);
     })
   );
   document.querySelectorAll(".tx-receipt-thumb").forEach((img) => {
@@ -790,6 +857,7 @@ async function loadTx() {
   document.querySelectorAll("#tx-list .tx-row").forEach((row) =>
     row.addEventListener("click", (e) => {
       if (e.target.closest("button, input, img, a")) return;
+      if (!row.dataset.txId) return; // kepala grup ditangani handler expand sendiri
       showTxDetail(row.dataset.txId);
     })
   );
@@ -805,16 +873,25 @@ function updateSelBar() {
   const n = selectedIds.size;
   $("#sel-count").textContent = `${n} dipilih`;
   $("#tx-del-selected").disabled = n === 0;
-  const boxes = document.querySelectorAll(".tx-check");
+  let total = 0;
+  document.querySelectorAll(".tx-check").forEach((c) => {
+    total += c.classList.contains("tx-check-group")
+      ? (c.dataset.groupIds || "").split(",").filter(Boolean).length
+      : 1;
+  });
   const all = $("#tx-select-all");
-  all.checked = boxes.length > 0 && n === boxes.length;
-  all.indeterminate = n > 0 && n < boxes.length;
+  all.checked = total > 0 && n === total;
+  all.indeterminate = n > 0 && n < total;
 }
 
 $("#tx-select-all").addEventListener("change", (e) => {
   document.querySelectorAll(".tx-check").forEach((c) => {
     c.checked = e.target.checked;
-    if (c.checked) selectedIds.add(c.dataset.id);
+    if (c.classList.contains("tx-check-group")) {
+      (c.dataset.groupIds || "").split(",").filter(Boolean).forEach((id) =>
+        c.checked ? selectedIds.add(id) : selectedIds.delete(id)
+      );
+    } else if (c.checked) selectedIds.add(c.dataset.id);
     else selectedIds.delete(c.dataset.id);
   });
   updateSelBar();
@@ -1342,7 +1419,7 @@ function obtainBulkRow() {
   addBulkRow();
   return $("#bulk-rows").lastElementChild;
 }
-function fillOneBulkRow(row, { date, category, amount, note, payment, file }) {
+function fillOneBulkRow(row, { date, category, amount, note, payment, file, groupId }) {
   const typeSel = row.querySelector(".b-type");
   typeSel.value = "out";
   typeSel.dispatchEvent(new Event("change")); // isi ulang opsi kategori (keluar)
@@ -1351,6 +1428,7 @@ function fillOneBulkRow(row, { date, category, amount, note, payment, file }) {
   if (amount) row.querySelector(".b-amount").value = Number(amount).toLocaleString("id-ID");
   if (note) row.querySelector(".b-note").value = note;
   if (payment) row.dataset.payment = payment;
+  if (groupId) row.dataset.groupId = groupId;
   if (file) {
     try {
       const fi = row.querySelector(".b-file");
@@ -1362,6 +1440,7 @@ function fillOneBulkRow(row, { date, category, amount, note, payment, file }) {
   }
 }
 function fillBulkRowFromScan(r, file) {
+  const groupId = crypto.randomUUID(); // 1 struk = 1 grup di daftar transaksi
   if (r.items && r.items.length) {
     r.items.forEach((it, idx) => {
       fillOneBulkRow(obtainBulkRow(), {
@@ -1371,6 +1450,7 @@ function fillBulkRowFromScan(r, file) {
         note: it.qty > 1 ? `${it.name} x${it.qty}` : it.name,
         payment: r.payment,
         file: idx === 0 ? file : null,
+        groupId,
       });
     });
   } else {
@@ -1381,6 +1461,7 @@ function fillBulkRowFromScan(r, file) {
       note: r.merchant,
       payment: r.payment,
       file,
+      groupId,
     });
   }
 }
@@ -1427,6 +1508,7 @@ $("#bulk-submit").addEventListener("click", async () => {
       amount,
       note: row.querySelector(".b-note").value.trim(),
       payment: row.dataset.payment || $("#bulk-payment").value,
+      group_id: row.dataset.groupId || "",
       file: row.querySelector(".b-file").files[0] || null,
     });
   }

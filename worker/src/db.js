@@ -93,6 +93,13 @@ export async function initDb(db) {
     await db.exec("ALTER TABLE transactions ADD COLUMN payment TEXT NOT NULL DEFAULT ''");
   }
 
+  // Migrasi: kolom group_id — pengikat item-item dari 1 struk yang sama
+  // (hasil scan borongan) agar tampil sebagai 1 grup di daftar.
+  const hasGroupId = (cols.results || []).some((c) => c.name === "group_id");
+  if (!hasGroupId) {
+    await db.exec("ALTER TABLE transactions ADD COLUMN group_id TEXT NOT NULL DEFAULT ''");
+  }
+
   // Seed penginput default — idempoten seperti kategori.
   const ipPlaceholders = DEFAULT_INPUTTERS.map(() => "(?)").join(", ");
   await db
