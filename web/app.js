@@ -319,37 +319,143 @@ $("#logout-btn").addEventListener("click", () => {
 });
 
 // ---------------- layar pilih profil (ala Netflix) ----------------
-// Backsound "ta-dum" ala Netflix — disintesis via WebAudio (tanpa file audio).
+// Backsound "ta-dum" ala Netflix — disintesis via WebAudio (tanpa file audio):
+// desis naik (reverse cymbal) -> ketukan "ta" -> akord orkestra "dum" + gema.
 let audioCtx = null;
 function playNetflixSound() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === "suspended") audioCtx.resume();
-    const t0 = audioCtx.currentTime;
-    const master = audioCtx.createGain();
-    master.gain.value = 0.55;
-    master.connect(audioCtx.destination);
-    const hit = (freqs, start, dur, vol, type = "triangle") => {
-      freqs.forEach((f) => {
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = type;
-        o.frequency.value = f;
-        g.gain.setValueAtTime(0, t0 + start);
-        g.gain.linearRampToValueAtTime(vol, t0 + start + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
-        o.connect(g);
-        g.connect(master);
-        o.start(t0 + start);
-        o.stop(t0 + start + dur + 0.1);
-      });
+    const ctx = audioCtx;
+    const t0 = ctx.currentTime + 0.02;
+
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.ratio.value = 6;
+    comp.connect(ctx.destination);
+    const master = ctx.createGain();
+    master.gain.value = 0.6;
+    master.connect(comp);
+
+    // Gema sederhana: jaringan delay berumpan-balik berperedam.
+    const wet = ctx.createGain();
+    wet.gain.value = 0.4;
+    wet.connect(master);
+    [0.13, 0.21, 0.29].forEach((d) => {
+      const delay = ctx.createDelay(1);
+      delay.delayTime.value = d;
+      const fb = ctx.createGain();
+      fb.gain.value = 0.34;
+      const damp = ctx.createBiquadFilter();
+      damp.type = "lowpass";
+      damp.frequency.value = 2400;
+      delay.connect(damp);
+      damp.connect(fb);
+      fb.connect(delay);
+      delay.connect(wet);
+      master.connect(delay);
+    });
+
+    // Buffer noise putih untuk desis & ketukan.
+    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const noise = (start, dur) => {
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+      src.start(start);
+      src.stop(start + dur);
+      return src;
     };
-    // "ta-" — hentakan rendah pertama
-    hit([98, 147, 196], 0, 0.45, 0.5);
-    hit([49], 0, 0.5, 0.6, "sine");
-    // "-dum" — akord mayor cerah menyusul, bergema lebih lama
-    hit([147, 185, 220, 294, 370], 0.32, 1.5, 0.32);
-    hit([73], 0.32, 1.2, 0.5, "sine");
+
+    // 1) Desis naik ala reverse cymbal menuju hentakan.
+    const HIT = t0 + 0.45;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(500, t0);
+    bp.frequency.exponentialRampToValueAtTime(5200, HIT);
+    const bpGain = ctx.createGain();
+    bpGain.gain.setValueAtTime(0.0001, t0);
+    bpGain.gain.exponentialRampToValueAtTime(0.16, HIT);
+    bpGain.gain.exponentialRampToValueAtTime(0.0001, HIT + 0.03);
+    noise(t0, 0.55).connect(bp);
+    bp.connect(bpGain);
+    bpGain.connect(master);
+
+    // 2) "ta" — ketukan perkusif: nada jatuh + klik noise pendek.
+    const knock = ctx.createOscillator();
+    knock.type = "sine";
+    knock.frequency.setValueAtTime(190, HIT);
+    knock.frequency.exponentialRampToValueAtTime(52, HIT + 0.16);
+    const knockGain = ctx.createGain();
+    knockGain.gain.setValueAtTime(0.9, HIT);
+    knockGain.gain.exponentialRampToValueAtTime(0.0001, HIT + 0.28);
+    knock.connect(knockGain);
+    knockGain.connect(master);
+    knock.start(HIT);
+    knock.stop(HIT + 0.3);
+    const clickBp = ctx.createBiquadFilter();
+    clickBp.type = "highpass";
+    clickBp.frequency.value = 1200;
+    const clickGain = ctx.createGain();
+    clickGain.gain.setValueAtTime(0.35, HIT);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, HIT + 0.07);
+    noise(HIT, 0.09).connect(clickBp);
+    clickBp.connect(clickGain);
+    clickGain.connect(master);
+
+    // 3) "dum" — akord mayor orkestra berlapis, filter membuka, gema panjang.
+    const DUM = HIT + 0.27;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(750, DUM);
+    lp.frequency.exponentialRampToValueAtTime(6800, DUM + 0.3);
+    lp.frequency.exponentialRampToValueAtTime(2600, DUM + 2.4);
+    const chordGain = ctx.createGain();
+    chordGain.gain.setValueAtTime(0.0001, DUM);
+    chordGain.gain.exponentialRampToValueAtTime(0.5, DUM + 0.06);
+    chordGain.gain.exponentialRampToValueAtTime(0.0001, DUM + 2.8);
+    lp.connect(chordGain);
+    chordGain.connect(master);
+    [73.4, 110, 146.8, 185, 220, 293.7, 369.9, 440, 587.3].forEach((f) => {
+      [-6, 5].forEach((cents) => {
+        const o = ctx.createOscillator();
+        o.type = "sawtooth";
+        o.frequency.value = f;
+        o.detune.value = cents;
+        const g = ctx.createGain();
+        g.gain.value = f < 200 ? 0.16 : 0.09;
+        o.connect(g);
+        g.connect(lp);
+        o.start(DUM);
+        o.stop(DUM + 2.9);
+      });
+    });
+    // Sub-bass penopang + petikan terang di awal akord.
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.value = 36.7;
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.55, DUM);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, DUM + 1.9);
+    sub.connect(subGain);
+    subGain.connect(master);
+    sub.start(DUM);
+    sub.stop(DUM + 2);
+    [587.3, 739.99].forEach((f) => {
+      const o = ctx.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.22, DUM);
+      g.gain.exponentialRampToValueAtTime(0.0001, DUM + 0.5);
+      o.connect(g);
+      g.connect(master);
+      o.start(DUM);
+      o.stop(DUM + 0.55);
+    });
   } catch {
     /* audio tidak tersedia — diam saja */
   }
